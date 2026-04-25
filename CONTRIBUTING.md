@@ -10,7 +10,7 @@ Thanks for considering a contribution. This skill is a Claude Code skill — cod
 bash scripts/test-integration.sh
 ```
 
-This exercises `design-lint.mjs`, `catalog-components.mjs`, `check-reuse.mjs`, and `similarity.mjs` against self-contained fixtures. It does not require impeccable to be installed.
+This exercises `design-lint.mjs`, `catalog-components.mjs`, `check-reuse.mjs`, and `similarity.mjs` against self-contained fixtures. A vendored stub at `scripts/test-fixtures/impeccable/` stands in for the real impeccable parser, so you don't need impeccable installed locally to run the smoke test or have it pass in CI.
 
 **2. For non-trivial changes (new features, behavior changes, new subcommands):** walk through the relevant scenarios in [VERIFICATION.md](VERIFICATION.md) on a throwaway test project. Especially relevant if you touch `plan.md`, `run.md`, the design-system pipeline, or any of the helper scripts.
 

@@ -36,6 +36,8 @@ This copies the skill into `~/.claude/skills/rivet/`. Restart Claude Code or sta
 
 Verify: `ls ~/.claude/skills/rivet/` should show `SKILL.md plan.md run.md review.md status.md learnings.md verify.md README.md scripts/`
 
+To uninstall: `bash scripts/uninstall.sh` (add `--force` to skip the confirmation prompt; honors `$CLAUDE_HOME` the same as `install.sh`).
+
 ## Permissions You're Granting
 
 `/rivet` declares `allowed-tools: Read Write Edit Bash Grep Glob Agent TodoWrite` in [SKILL.md](SKILL.md). On first invocation Claude Code will prompt you to allow each. What each is used for in this skill:
@@ -145,7 +147,11 @@ Tested extensively on Opus 4.7 for `plan` and Sonnet 4.6 for `run`/`review`. If 
 
 **Skip this entire section if you don't need design-system governance** — the plan/run/review/status/learnings pipeline works stand-alone.
 
-If you install the companion [impeccable](https://github.com/pbakaus/impeccable) skill at `~/.agents/skills/impeccable/` (or set `IMPECCABLE_DIR` to its path) and place `PRODUCT.md` + `DESIGN.md` at your project root, `/rivet` wires in design-system enforcement for frontend work:
+If you install the companion [impeccable](https://github.com/pbakaus/impeccable) skill at `~/.agents/skills/impeccable/` (or set `IMPECCABLE_DIR` to its path) and place `PRODUCT.md` + `DESIGN.md` at your project root, `/rivet` wires in design-system enforcement for frontend work.
+
+**Non-default install path?** If you put impeccable somewhere other than `~/.agents/skills/impeccable/` — for example, `~/.claude/skills/impeccable/` to keep it next to other Claude skills — export `IMPECCABLE_DIR=~/.claude/skills/impeccable` (or whatever path you used) in your shell profile so `/rivet` can find it. The fallback is `~/.agents/skills/impeccable/`; without `IMPECCABLE_DIR` set, anywhere else won't be discovered.
+
+What it gets you:
 
 - **Setup (once per project):** run `$impeccable teach` (writes `PRODUCT.md` with `register:` + optional `## Surfaces`), then `$impeccable document` OR Google Stitch (writes `DESIGN.md`).
 - **`/rivet plan`**: generates a component catalog (reviewable before proceeding), writes a canonical per-surface design brief at `docs/design/brief-{surface}.md` (surfaces are project-wide, so canonical briefs are shared across every spec; optional phase-scoped override at `docs/plans/{spec}/{phase}/design-brief-{surface}.md`), and appends a Design Spec + Design Verification to every UI task — tokens, copy, states, motion, `reuse:` / `new_primitive:`, bans. Per-task validation during generation: any UI task missing both fields triggers a retry (capped at 2) then escalates to the user.

@@ -14,6 +14,11 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Point design-lint.mjs at the vendored stub design-parser.mjs so the smoke test
+# is self-contained (no impeccable install required). See scripts/test-fixtures/
+# impeccable/scripts/design-parser.mjs for the stub.
+export IMPECCABLE_DIR="$SCRIPT_DIR/test-fixtures/impeccable"
+
 PASS=0
 FAIL=0
 FAILED_STEPS=()
