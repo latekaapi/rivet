@@ -1,0 +1,16 @@
+# Local Claude Code permissions cache (user-specific, never commit)
+.claude/settings.local.json
+.claude/
+
+# Node
+node_modules/
+
+# Editor / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Test artefacts
+scripts/test-fixtures/tmp/
+*.log
