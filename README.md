@@ -1,7 +1,7 @@
 # Rivet — Spec-Driven Development Pipeline for Claude Code
 
 <p align="center">
-  <img src="docs/assets/rivet-hero.jpg" alt="Rivet mascot: three watercolor robot characters illustrating the /rivet plan, /rivet run, and /rivet review subcommands, with the tagline 'One task. One commit. Driven tight.'" width="100%">
+  <img src="docs/assets/rivet-hero.webp" alt="Rivet mascot: three watercolor robot characters illustrating the /rivet plan, /rivet run, and /rivet review subcommands, with the tagline 'One task. One commit. Driven tight.'" width="100%">
 </p>
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg) ![Node: 18+](https://img.shields.io/badge/node-18%2B-green.svg)
