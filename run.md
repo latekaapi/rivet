@@ -19,7 +19,7 @@ Before loading context or executing anything, verify the environment is ready. S
 
 4. **Branch check.** If currently on `main` or `master`:
    - Offer to create and switch to `rivet/{spec}/{phase-id}` (or `rivet/adhoc/{name}` for ad-hoc plans).
-   - Convention documented in [README.md](README.md). User can decline and stay on main.
+   - Convention documented in [docs/overview.md](docs/overview.md) (also covered in [README.md](README.md) section 5). User can decline and stay on main.
 
 5. **Design context drift.** If the plan's frontmatter has `design_hashes` (impeccable integration present), recompute each surface's hashes and compare against stored values:
 
