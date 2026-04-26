@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `scripts/uninstall.sh` companion script with the same flag shape.
 - README "Permissions You're Granting" section + uninstall mention; impeccable section now documents `IMPECCABLE_DIR` for non-default install paths (e.g., `~/.claude/skills/impeccable/`).
 - New comprehensive `README.md` covering every subcommand, flag, NL intent, file convention, helper script, configuration knob, plus 14 common workflows and ~25 troubleshooting scenarios.
+- Hero mascot image at `docs/assets/rivet-hero.png`, embedded near the top of the README.
 
 ### Changed
 - **Documentation reorganisation.** The previous README (elevator pitch + supported stacks + FAQ + file structure) moved to `docs/overview.md`. The repo's `README.md` is now the comprehensive guide, since it's the document most readers will want to land on first.
