@@ -19,6 +19,7 @@ If you want the elevator pitch instead, see [docs/overview.md](docs/overview.md)
 - [1. Installation & first-run](#1-installation--first-run)
 - [2. Project setup prerequisites](#2-project-setup-prerequisites)
 - [3. The mental model](#3-the-mental-model)
+- [3.5 Usage at a glance](#35-usage-at-a-glance)
 - [4. Subcommand reference](#4-subcommand-reference)
   - [4.1 `/rivet plan`](#41-rivet-plan)
   - [4.2 `/rivet run`](#42-rivet-run)
@@ -133,6 +134,66 @@ Each sub-plan file has a YAML frontmatter listing its tasks (id, title, status, 
 Ad-hoc work that doesn't belong to any spec uses a parallel layout under `docs/plans/adhoc/`.
 
 The skill is **not** a chat assistant — it's a deterministic pipeline driven by Markdown files plus six commands.
+
+---
+
+## 3.5 Usage at a glance
+
+A quick reference of common invocations. Section 4 has the full per-subcommand reference.
+
+**Spec creation (entry point — produce `docs/specs/{name}.md`):**
+
+```
+/rivet spec "founders waste hours on weekly investor updates..."  → draft from a braindump
+/rivet spec --from braindump.md                                   → draft from a file
+/rivet spec                                                       → synthesize from current conversation
+/rivet spec main                                                  → continue an existing spec from its current Status
+/rivet spec main --refresh                                        → additive re-validation; decisions stay locked
+/rivet spec main --refresh --decision-revisit D2                  → re-open one locked decision
+/rivet spec --lite "internal tool for ops team"                   → smaller bet, briefer questions
+/rivet spec --from brief.docx --name extension                    → name override + file input
+```
+
+Auto-detects attached files in Claude Code / VS Code (drag a file in — no `--from` needed). `--force` bypasses soft quality gates; bypassed gates get recorded in `## Low-Confidence Warnings` at the top of the spec.
+
+**Spec workflow (every spec command takes `{spec} {phase}`):**
+
+```
+/rivet plan main phase-0                              → generate micro-step plans from main spec
+/rivet plan admin phase-0                             → plans from admin spec
+/rivet plan main phase-0 --refresh                    → re-validate existing plan vs current codebase
+/rivet plan main phase-0 regenerate sub-plan 2        → rewrite one sub-plan only
+/rivet run main phase-0                               → execute via subagents
+/rivet run main phase-0 task 3                        → jump to a specific task
+/rivet run admin phase-0 expand task 4                → break down a complex task
+/rivet run main phase-0 revise task 5 "reason"        → rewrite a task mid-run (plan was wrong)
+/rivet run main phase-0 rollback                      → reset to last checkpoint tag (destructive)
+/rivet rollback main phase-0 rivet/main/phase-0/ckpt-2  → reset to a specific checkpoint
+```
+
+**Single-spec shorthand (when only one spec exists, in `docs/specs/` OR a bare `spec.md` at root):**
+
+```
+/rivet plan phase-0                                  → single-spec shorthand
+/rivet run phase-0 task 3                            → same inference for run
+/rivet status                                        → same scan layout
+```
+
+**Ad-hoc workflow (work not in any spec — no spec name):**
+
+```
+/rivet plan "add webhook signing verification"     → research + plan from description
+/rivet run adhoc/webhook-signing-verification      → execute ad-hoc plan
+```
+
+**Anytime:**
+
+```
+/rivet status                            → progress across all specs + ad-hoc
+/rivet status main                       → drill into just one spec
+/rivet review                            → senior code review (16 points + design audit on frontend files)
+/rivet learnings                         → end-of-session CLAUDE.md sweep
+```
 
 ---
 

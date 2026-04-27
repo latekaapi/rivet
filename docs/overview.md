@@ -74,6 +74,20 @@ Checkpoint tags accumulate on whichever branch you're on: `rivet/{spec}/{phase-i
 
 ## Usage
 
+**Spec creation (entry point — produce `docs/specs/{name}.md`):**
+```
+/rivet spec "founders waste hours on weekly investor updates..."  → draft from a braindump
+/rivet spec --from braindump.md                                   → draft from a file
+/rivet spec                                                       → synthesize from current conversation
+/rivet spec main                                                  → continue an existing spec from its current Status
+/rivet spec main --refresh                                        → additive re-validation; decisions stay locked
+/rivet spec main --refresh --decision-revisit D2                  → re-open one locked decision
+/rivet spec --lite "internal tool for ops team"                   → smaller bet, briefer questions
+/rivet spec --from brief.docx --name extension                    → name override + file input
+```
+
+Auto-detects attached files in Claude Code / VS Code (drag a file in — no `--from` needed). `--force` bypasses soft quality gates; bypassed gates get recorded in `## Low-Confidence Warnings` at the top of the spec.
+
 **Spec workflow (every spec command takes `{spec} {phase}`):**
 ```
 /rivet plan main phase-0                              → generate micro-step plans from main spec
@@ -111,6 +125,9 @@ Checkpoint tags accumulate on whichever branch you're on: `rivet/{spec}/{phase-i
 
 ## What Each Subcommand Does
 
+### /rivet spec
+Produces a strategic execution document at `docs/specs/{name}.md` from a braindump, attached file, conversation context, or existing draft. Three internal phases tracked by a `Status:` field (`Validating | Validated | Architecting | Drafting | Complete | Killed | Pivoted`). Validation rigor: four-register extraction (Known Facts / Stated Assumptions / Open Questions / Risks), bounded competitive scout via parallel subagents, kill criteria with dates, bet sizing + reversibility analysis, adversarial pass producing an Opposition Register. Architecture phase requires 2–3 alternatives per major decision, capability decomposition (capabilities are primary; phases derived), pricing + GTM + operating-model + non-goals as first-class sections. Synthesis emits `## Phase N` headings that `/rivet plan` consumes. Soft quality gates with `--force` bypass; refresh is additive (`--refresh` walks registers, decisions stay locked unless `--decision-revisit D{n}`). Multi-spec capable: Step 1.3 proposes decomposition when independent subsystems are detected. Auto-detects attached files (5 input sources priority-ordered). `--lite` for smaller bets, `--deep` (default) for full rigor.
+
 ### /rivet plan
 Reads the spec (or takes an ad-hoc task description), gathers context via parallel research agents, proposes a split into 4-8 hour sub-plans, and generates micro-step task files with YAML frontmatter (machine-readable task list, dependencies, status). Each task follows TDD: write failing test → verify fail → implement → verify pass → commit. Every sub-plan ends with an integration test. Ad-hoc mode runs full web + docs + codebase research before planning. `--refresh` re-validates an existing plan; `regenerate sub-plan N` rewrites one sub-plan.
 
@@ -134,6 +151,7 @@ Reads `learnings-scratch.md` files (in-flight captures during execution) first, 
 The skill **cannot** switch models on your behalf. Invoke the right model before each subcommand:
 
 ```
+Strongest Anthropic model (e.g. Opus family)   → /rivet spec       (thinking task — adversarial pass, register classification, decision tradeoffs)
 Strongest Anthropic model (e.g. Opus family)   → /rivet plan       (planning needs the strongest reasoning)
 Fast capable model (e.g. Sonnet family)        → /rivet run        (execution needs speed; plan already has the decisions)
 Fast capable model                             → /rivet review     (either works; Sonnet-class is faster)
@@ -141,7 +159,7 @@ Fast capable model                             → /rivet status     (trivial)
 Fast capable model                             → /rivet learnings  (either works)
 ```
 
-Tested extensively on Opus 4.7 for `plan` and Sonnet 4.6 for `run`/`review`. If you start `/rivet run` on Opus, it'll still work — just slower and pricier. If you start `/rivet plan` on Haiku-class, the plan will likely be too underspecified for a cheaper executor to follow.
+Tested extensively on Opus 4.7 for `plan` and Sonnet 4.6 for `run`/`review`. If you start `/rivet run` on Opus, it'll still work — just slower and pricier. If you start `/rivet plan` or `/rivet spec` on Haiku-class, the output will likely be too underspecified for a cheaper executor to follow — `/rivet spec` in particular produces specs that look right syntactically but miss the reasoning that separates a useful spec from a checked-the-box one.
 
 ## Optional: Design-System Integration (impeccable)
 
