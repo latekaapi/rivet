@@ -230,7 +230,7 @@ If the trigger doesn't fire (no frontend files in scope, or PRODUCT.md / DESIGN.
 - Only P2/P3 → COMMENT (proceed at your discretion)
 - Nothing found → APPROVE
 
-## Step 6: Save Report to `reviews/`
+## Step 6: Save Report to `docs/reviews/`
 
 Every `/rivet review` run persists its report to disk so reviews become durable artifacts (linkable, diffable, re-readable) instead of vanishing with the conversation. This step is unconditional — no opt-out flag in v1.
 
@@ -260,16 +260,16 @@ Reports are stratified by detected scope so multi-spec repos don't pile every re
 
    | Helper / scope result | Directory |
    |---|---|
-   | `kind: spec` | `reviews/{spec}/{phase-id}/` |
-   | `kind: adhoc` | `reviews/adhoc/{name}/` |
-   | `kind: none`, scope = `branch` | `reviews/branch/` |
-   | scope = `files` | `reviews/files/` |
-   | scope = `full` | `reviews/full/` |
-   | scope = `default`, helper = `none` | `reviews/default/` |
+   | `kind: spec` | `docs/reviews/{spec}/{phase-id}/` |
+   | `kind: adhoc` | `docs/reviews/adhoc/{name}/` |
+   | `kind: none`, scope = `branch` | `docs/reviews/branch/` |
+   | scope = `files` | `docs/reviews/files/` |
+   | scope = `full` | `docs/reviews/full/` |
+   | scope = `default`, helper = `none` | `docs/reviews/default/` |
 
    Create the directory with `mkdir -p <directory>` if missing.
 
-3. **Derive the filename** from the scope shape captured in Step 1 (filename only — no `reviews/` prefix; that comes from Step 6.2):
+3. **Derive the filename** from the scope shape captured in Step 1 (filename only — no `docs/reviews/` prefix; that comes from Step 6.2):
 
    | Scope | Filename pattern |
    |---|---|
@@ -279,11 +279,11 @@ Reports are stratified by detected scope so multi-spec repos don't pile every re
    | `full` | `full-{YYYY-MM-DD}.md` |
    | `default` (no args) | `changes-{YYYY-MM-DD}-{kebab(current branch)}.md` |
 
-   Full path = `<directory from Step 6.2>/<filename from Step 6.3>`. Example: `reviews/main/phase-2/pr-42-fix-webhook-signing.md` (lineage detected) or `reviews/full/full-2026-04-27.md` (no lineage).
+   Full path = `<directory from Step 6.2>/<filename from Step 6.3>`. Example: `docs/reviews/main/phase-2/pr-42-fix-webhook-signing.md` (lineage detected) or `docs/reviews/full/full-2026-04-27.md` (no lineage).
 
 4. **Kebab rule.** Lowercase; replace runs of non-alphanumeric chars with `-`; trim leading/trailing `-`; collapse repeats. PR-title truncation cuts at the last word boundary that keeps total length ≤50 chars.
 
-5. **Collision handling.** If the target path already exists, append `-2`, `-3`, … before `.md` until the path is free. **Never overwrite** — prior reviews are evidence and shouldn't disappear. Existing flat `reviews/*.md` files from before this change stay untouched (plan's argument parser glob `reviews/**/*.md` catches both old and new locations).
+5. **Collision handling.** If the target path already exists, append `-2`, `-3`, … before `.md` until the path is free. **Never overwrite** — prior reviews are evidence and shouldn't disappear.
 
 6. **Write the report.** Prepend a YAML frontmatter block to the markdown produced in Step 5:
 
@@ -308,7 +308,7 @@ Reports are stratified by detected scope so multi-spec repos don't pile every re
 
 7. **Echo the path back to the user** before advancing to Step 7:
 
-   > Saved review to `reviews/main/phase-2/pr-42-fix-webhook-signing.md`.
+   > Saved review to `docs/reviews/main/phase-2/pr-42-fix-webhook-signing.md`.
 
 ## Step 7: Offer to Fix (chains into plan/run)
 

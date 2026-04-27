@@ -82,9 +82,9 @@ elif first == "--from-review":
     review_path = args[1]
     review_args = args[2:]
     → "review-source"
-elif first matches glob "reviews/**/*.md" AND file exists:
-    # Review-source mode (implicit path). The glob matches both legacy flat
-    # reviews/pr-42-...md and stratified reviews/{spec}/{phase}/pr-42-...md.
+elif first matches glob "docs/reviews/**/*.md" AND file exists:
+    # Review-source mode (implicit path). The glob matches both flat
+    # docs/reviews/pr-42-...md and stratified docs/reviews/{spec}/{phase}/pr-42-...md.
     review_path = first
     review_args = args[1:]
     → "review-source"
@@ -115,8 +115,8 @@ Resolve the spec path from `spec_files` once `spec` is known (`docs/specs/{spec}
 - `first` is a spec name and `rest` is empty ("spec-no-phase") → list available phases and ask.
 - `spec_files` empty → already handled in Step 1.
 - `first == "--from-review"` but `args[1]` is missing or doesn't exist on disk → tell the user the path was missing or unreadable and stop. Don't guess.
-- `first` is a path under `reviews/` but the file doesn't exist → same — stop with a clear error.
-- A spec is literally named `reviews` AND the user types `/rivet plan reviews/...` → the `first in spec_names` branch wins (spec mode). To run review-source on such a project, use the explicit `--from-review` flag.
+- `first` is a path under `docs/reviews/` but the file doesn't exist → same — stop with a clear error.
+- A spec is literally named `reviews` AND the user types `/rivet plan docs/reviews/...` → the `first in spec_names` branch wins (spec mode). To run review-source on such a project, use the explicit `--from-review` flag.
 
 ### Guard: plans already exist for this target
 
@@ -190,7 +190,7 @@ The same helper is invoked by [review.md](review.md) Step 6 to stratify the revi
 | `kind: adhoc` | `docs/plans/adhoc/review-{slug}/{nn}-{bucket}.md` | `rivet/adhoc/review-{slug}` | `/rivet run adhoc/review-{slug}` |
 | `kind: none` | `docs/plans/adhoc/review-{slug}/{nn}-{bucket}.md` | `rivet/adhoc/review-{slug}` | `/rivet run adhoc/review-{slug}` |
 
-`{slug}` derives from the review filename: take the basename, strip the `.md` extension, lowercase and kebab-case (existing rule from [review.md](review.md) Step 6.3). Example: `reviews/main/phase-2/pr-42-fix-webhook-signing.md` → `slug = pr-42-fix-webhook-signing`.
+`{slug}` derives from the review filename: take the basename, strip the `.md` extension, lowercase and kebab-case (existing rule from [review.md](review.md) Step 6.3). Example: `docs/reviews/main/phase-2/pr-42-fix-webhook-signing.md` → `slug = pr-42-fix-webhook-signing`.
 
 #### Step D: Apply filter flags
 
