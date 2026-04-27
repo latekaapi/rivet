@@ -1,6 +1,6 @@
 ---
 name: rivet
-description: "Spec-driven development pipeline — plan, run, review, and track implementation from a spec or ad-hoc tasks. Where intent gets shaped into shipped code. Subcommands: plan, run, rollback, review, status, learnings."
+description: "Spec-driven development pipeline — produce a strategic spec from a braindump, then plan, run, review, and track implementation. Where intent gets shaped into shipped code. Subcommands: spec, plan, run, rollback, review, status, learnings."
 argument-hint: [subcommand] [args]
 disable-model-invocation: true
 allowed-tools: Read Write Edit Bash Grep Glob Agent TodoWrite
@@ -14,6 +14,7 @@ Parse the first word of `$ARGUMENTS` to determine the subcommand. Then read the 
 
 | First word | Action |
 |---|---|
+| `spec` | Read `${CLAUDE_SKILL_DIR}/spec.md`, then execute. Args = `<braindump>` OR `--from <file>` OR `{name}` (existing spec, continue from current `Status:`) OR `{name} --refresh` (additive re-validation) OR none (synthesize from conversation context). Optional flags: `--lite` / `--deep`, `--force` (bypass quality gates), `--name <n>`. |
 | `plan` | Read `${CLAUDE_SKILL_DIR}/plan.md`, then execute. Args = `{spec} {phase}` OR free-text ad-hoc task description OR `{spec} {phase} --refresh` to re-validate an existing plan OR `{spec} {phase} regenerate sub-plan N` to rewrite one sub-plan. |
 | `run` | Read `${CLAUDE_SKILL_DIR}/run.md`, then execute. Args = `{spec} {phase}` or `adhoc/{name}` + optional natural language (e.g., `task 3`, `expand task 4`, `revise task 5 "reason"`, `rollback`, `start from task 5`). |
 | `rollback` | Read `${CLAUDE_SKILL_DIR}/run.md`'s Rollback section. Args = `{spec} {phase}` + optional target tag. Shortcut for `run {spec} {phase} rollback`. |
@@ -29,12 +30,22 @@ Parse the first word of `$ARGUMENTS` to determine the subcommand. Then read the 
 /rivet — Development Pipeline
 
 Subcommands:
+  /rivet spec [braindump | --from file | {name} | (none)]
+                                    Produce a strategic spec at docs/specs/{name}.md (Validation → Architecture → Synthesis)
   /rivet plan [spec phase | task]   Generate micro-step plan from a spec phase or ad-hoc task
   /rivet run [spec phase | adhoc/x] Execute plan via subagents with review + checkpoints
   /rivet rollback [spec phase]      Reset to a checkpoint tag (destructive; confirms first)
   /rivet review [scope]            Run senior code review (16 points + impeccable design audit when frontend files are in scope)
   /rivet status [spec]              Show progress across all specs + ad-hoc (optional spec filter)
   /rivet learnings                 End-of-session CLAUDE.md/README.md sweep
+
+Spec creation:
+  /rivet spec "founders waste hours writing weekly investor updates..."  → drafts docs/specs/main.md from braindump
+  /rivet spec --from braindump.md                                         → drafts from a file
+  /rivet spec                                                             → synthesizes from current conversation
+  /rivet spec main --refresh                                              → additive re-validation (registers + research, decisions stay locked)
+  /rivet spec main --refresh --decision-revisit D2                        → re-open one locked decision
+  /rivet spec --lite "internal tool for ops team"                         → smaller bet, briefer questions
 
 Spec workflow (multi-spec: every spec command takes {spec} {phase}):
   /rivet plan main phase-0                          → generates sub-plans from main spec's Phase 0

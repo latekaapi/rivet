@@ -26,6 +26,7 @@ If you want the elevator pitch instead, see [docs/overview.md](docs/overview.md)
   - [4.4 `/rivet review`](#44-rivet-review)
   - [4.5 `/rivet status`](#45-rivet-status)
   - [4.6 `/rivet learnings`](#46-rivet-learnings)
+  - [4.7 `/rivet spec`](#47-rivet-spec)
 - [5. File layout & conventions](#5-file-layout--conventions)
 - [6. Spec discovery rules](#6-spec-discovery-rules)
 - [7. Optional: impeccable design integration](#7-optional-impeccable-design-integration)
@@ -141,6 +142,7 @@ The router is `/rivet [subcommand] [args]`. Calling `/rivet` alone (or with an u
 
 | Subcommand | Recommended model | Purpose |
 |---|---|---|
+| `spec` | Opus family | Produce a strategic execution document from a braindump (Validation → Architecture → Synthesis) |
 | `plan` | Opus family | Generate micro-step plans from a spec phase or ad-hoc task |
 | `run` | Sonnet family | Execute plans via subagents with review + checkpoints |
 | `rollback` | Sonnet family | Reset to a checkpoint tag (destructive; confirms first) |
@@ -394,6 +396,71 @@ Rejected: session summaries, restating obvious code, generic best practices, one
 **Cleanup.** After the user reviews findings (apply or reject), `/rivet learnings` deletes every scratch file walked. Stale scratch content re-proposes itself otherwise.
 
 **"Nothing worth codifying"** is a valid and often-correct outcome. It's not failure — it's an honest answer.
+
+### 4.7 `/rivet spec`
+
+**Purpose.** Produce a strategic execution document at `docs/specs/{name}.md` that `/rivet plan` then consumes. Takes a braindump, an attached file, an existing draft, or just the current conversation, and runs three internal phases — **Validation → Architecture → Synthesis** — tracked by a `Status:` field at the top of the spec (`Validating | Validated | Architecting | Drafting | Complete | Killed | Pivoted`). Earlier phases stay visible in the final document; the spec is a record of what was thought through, not just a build plan.
+
+**Argument shapes:**
+
+| Form | Example | What it does |
+|---|---|---|
+| `<braindump>` | `/rivet spec "founders waste hours writing weekly investor updates..."` | Inline text. Default `--deep`, default name `main`. |
+| `--from <file>` | `/rivet spec --from braindump.md` | Explicit file input. Path-detection of attached files still runs. |
+| (no args) | `/rivet spec` | Synthesizes from the current conversation. Skips the clarification interview. |
+| `{name}` | `/rivet spec main` | Looks for `docs/specs/main.md`. If exists → continues from current `Status:`. If not → treats `main` as the name override and proceeds with intake. |
+| `{name} --refresh` | `/rivet spec main --refresh` | Additive re-validation. Decisions stay locked; assumptions and research get walked. |
+| `{name} --refresh --decision-revisit D2` | — | Re-opens one specific Decision Made; siblings stay locked. |
+| `--lite` / `--deep` | `/rivet spec --lite "internal team tool"` | Bet size; both have full rigor, `--lite` asks fewer questions. |
+| `--force` | — | Bypass quality gates. Bypassed gates are recorded in the spec's `## Low-Confidence Warnings` section. |
+| `--name <n>` | `/rivet spec --from draft.md --name extension` | Override default name. |
+
+**File attachment behavior in Claude Code.** Step 1.1 of [spec.md](spec.md) auto-detects attached files in client (path tokens, markdown links, `@file` references, attachment markers, "see the file" phrasing). Drag a file in and `/rivet spec` reads it without `--from`.
+
+**Three internal phases:**
+
+1. **Validation.** Quality gate (4 soft criteria) → clarification interview (one question at a time, 4–8 deep / 2–3 lite) → bet framing (six-clause template) → four-register extraction (Known Facts, Stated Assumptions, Open Questions, Risks) → bounded competitive scout via parallel subagents → kill criteria with dates → bet sizing + reversibility → adversarial pass producing an Opposition Register → recommendation (Proceed / Validate first / Pivot / Kill).
+2. **Architecture.** Always 2–3 alternatives per major decision → bounded research per component → architecture decisions logged with alternatives + trigger-to-revisit → capabilities decomposition (capabilities are primary; phases are derived) → pricing strategy → go-to-market → operating model → non-goals (≥3 with reasoning).
+3. **Synthesis.** Phase projection (capabilities → `## Phase N` headings that `/rivet plan` consumes) → cross-spec dependency surfacing → traceability links (anchor-linked from phase to capability to register entry) → Mermaid diagrams → hygiene self-review subagent → quality scoring against the 12-dimension rubric in [references/quality-rubric.md](references/quality-rubric.md).
+
+**Soft quality gates.** Missed criteria become warnings, not hard fails. The user can `--force` past them; bypassed gates are recorded in `## Low-Confidence Warnings` near the top of the spec, so the next reader (or `--refresh`) sees the gaps.
+
+**Multi-spec capable.** Step 1.3 scans for independent subsystems (different audience / deployment surface / release cadence / revenue logic). When detected, proposes decomposition (e.g., `extension.md` + `backend.md`); default is one spec, splitting is opt-in. Cross-spec dependencies are surfaced in Synthesis phase 4.2.
+
+**Refresh is additive.** `/rivet spec {name} --refresh` walks the registers (assumptions become Facts or Risks based on user input), re-fetches stale research (>4 weeks old), checks past-dated kill criteria for triggers, and recomputes the quality score. The Decision Log stays locked unless `--decision-revisit D{n}` re-opens a specific entry. To rewrite a spec from scratch, delete the spec file and start fresh.
+
+**Outputs:**
+- `docs/specs/{name}.md` — the spec itself (all three phases visible).
+- `docs/specs/{name}-research.md` — raw research findings with citations + provenance, linked from the main spec by section anchor.
+
+**When deep vs. lite:**
+- `--deep` (default) — bigger bets, longer runway, more rigor on opposition register and bet sizing. ≥3 kill criteria. ~4–8 clarification questions.
+- `--lite` — smaller bets (internal tools, weekend experiments, well-scoped extensions to existing products). ≥1 kill criterion. ~2–3 clarification questions. Same register format; fewer entries expected.
+
+**Pre-flight checks (Step 0):**
+1. **Working tree clean?** Warn if dirty (spec writes are low-risk; offer abort).
+2. **Existing spec at the target name?** Read its `Status:` and offer continue / refresh / overwrite / abort.
+3. **Project context.** Read `CLAUDE.md`, `PRODUCT.md` if present (especially the authors field for Step 2.9 co-founder alignment).
+
+**Recommended model.** Opus family. `/rivet spec` is a thinking task — adversarial pass, four-register classification, decision-tradeoff analysis, capability decomposition. Cheaper models produce specs that look right syntactically but miss the reasoning that separates a useful spec from a checked-the-box spec. Cost is small relative to the multi-week build the spec authorizes.
+
+**Reference docs** (linked from inside [spec.md](spec.md)):
+- [references/assumption-register-format.md](references/assumption-register-format.md) — the F/A/O/R pattern, transition rules.
+- [references/decision-log-format.md](references/decision-log-format.md) — Decisions Made + Decisions Deferred templates.
+- [references/question-frameworks.md](references/question-frameworks.md) — clarification banks, priority order.
+- [references/research-playbook.md](references/research-playbook.md) — bounded subagent dispatch, per-area budgets.
+- [references/decision-categories.md](references/decision-categories.md) — stack / data / pricing / GTM / architecture / moat tradeoffs.
+- [references/quality-rubric.md](references/quality-rubric.md) — 12-dimension scoring with pass thresholds.
+
+**Worked example.** A structural placeholder lives at [examples/headturn-spec.md](examples/headturn-spec.md). It mirrors the canonical output shape from [spec.md](spec.md) Step 5 with a "Worked snippets" appendix at the bottom showing concrete F-entry, D-entry, capability, and kill-criteria formats.
+
+**Next: `/rivet plan`.** Once the spec reaches `Status: Complete`:
+
+```
+/rivet plan {name} phase-0
+```
+
+`/rivet plan` reads the spec's `## Phase N` headings, picks the requested one, and generates sub-plans against it. Capability IDs and decision-log entries carry through.
 
 ---
 
