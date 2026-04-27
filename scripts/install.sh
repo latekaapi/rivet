@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# install.sh — Copy the /rivet skill into Claude Code's skills directory.
+# install.sh — Install the /rivet skill into Claude Code's skills directory.
 #
 # Default install location: ~/.claude/skills/rivet/
 # Override with $CLAUDE_HOME, e.g. CLAUDE_HOME=/opt/claude bash scripts/install.sh
 #
 # Flags:
 #   -f, --force   Overwrite existing install without prompting (for CI / automation).
+#   -l, --link    Symlink the source repo into the skills dir (dev mode).
+#                 Edits to your dev repo become live for every Claude Code session
+#                 with no re-install. Default is to copy.
 
 set -euo pipefail
 
 FORCE=0
+LINK=0
 for arg in "$@"; do
   case "$arg" in
     -f|--force) FORCE=1 ;;
-    -h|--help)  sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -l|--link)  LINK=1 ;;
+    -h|--help)  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install.sh: unknown flag '$arg' (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -30,7 +35,8 @@ fi
 
 mkdir -p "${DEST_ROOT}/skills"
 
-if [ -d "${DEST}" ]; then
+# `-e` catches both directories (copy installs) and symlinks (link installs).
+if [ -e "${DEST}" ] || [ -L "${DEST}" ]; then
   if [ "${FORCE}" -eq 1 ]; then
     rm -rf "${DEST}"
   else
@@ -43,12 +49,22 @@ if [ -d "${DEST}" ]; then
   fi
 fi
 
-cp -R "${SKILL_SRC}" "${DEST}"
+if [ "${LINK}" -eq 1 ]; then
+  ln -s "${SKILL_SRC}" "${DEST}"
+  MODE="symlinked"
+else
+  cp -R "${SKILL_SRC}" "${DEST}"
+  # Strip dev-only artefacts that shouldn't ship to the install location.
+  # Skipped in --link mode — those artefacts live in the user's source repo
+  # and rm -rf there would be destructive.
+  rm -rf "${DEST}/.git" "${DEST}/.github" "${DEST}/scripts/test-fixtures/tmp" 2>/dev/null || true
+  MODE="installed"
+fi
 
-# Strip dev-only artefacts that shouldn't ship to the install location.
-rm -rf "${DEST}/.git" "${DEST}/.github" "${DEST}/scripts/test-fixtures/tmp" 2>/dev/null || true
-
-echo "install.sh: installed → ${DEST}"
+echo "install.sh: ${MODE} → ${DEST}"
+if [ "${LINK}" -eq 1 ]; then
+  echo "  (symlink to ${SKILL_SRC} — edits there are live for every Claude Code session)"
+fi
 echo
 echo "Next steps:"
 echo "  1. Restart Claude Code (or start a new session) to pick up the skill."

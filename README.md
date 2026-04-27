@@ -65,6 +65,14 @@ ls ~/.claude/skills/rivet/   # should list SKILL.md plan.md run.md review.md ...
 bash scripts/test-integration.sh   # 10/10 PASS expected; self-contained, no impeccable required
 ```
 
+**Dev mode (symlink instead of copy):**
+
+```bash
+bash scripts/install.sh --link --force   # symlink from ~/.claude/skills/rivet/ to your dev repo
+```
+
+Use this if you're working on the skill itself. The skills dir becomes a symlink pointing at your source repo, so any edit you make to `plan.md`, `run.md`, scripts, etc. is immediately live in every Claude Code session — no re-install needed. The `SKILL.md` router lazy-loads subcommand files per-invocation, so the next `/rivet plan` (or whatever) reads your latest content. Edits to `SKILL.md` frontmatter still require a Claude Code restart.
+
 **Uninstall:**
 
 ```bash
@@ -72,7 +80,7 @@ bash scripts/uninstall.sh           # interactive
 bash scripts/uninstall.sh --force   # non-interactive
 ```
 
-Both honour `$CLAUDE_HOME`. `--help` on either prints the usage block from the script header.
+Both honour `$CLAUDE_HOME`. `--help` on either prints the usage block from the script header. `uninstall.sh` works on both copy and symlink installs (a symlink is removed, not followed).
 
 **Windows (PowerShell):**
 

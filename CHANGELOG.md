@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 - `scripts/test-fixtures/impeccable/scripts/design-parser.mjs` — vendored YAML-frontmatter-only stub of impeccable's parser so `scripts/test-integration.sh` is genuinely self-contained (verified by physically moving impeccable aside and re-running: 10/10 PASS).
 - `scripts/install.sh` `-f` / `--force` flag for non-interactive overwrites; `-h` / `--help` prints usage.
+- `scripts/install.sh` `-l` / `--link` flag for dev-mode symlink install. Edits to your source repo become live for every Claude Code session with no re-install. Mode-switches handled (`--force` swaps a symlink for a copy and vice versa).
 - `scripts/uninstall.sh` companion script with the same flag shape.
 - README "Permissions You're Granting" section + uninstall mention; impeccable section now documents `IMPECCABLE_DIR` for non-default install paths (e.g., `~/.claude/skills/impeccable/`).
 - New comprehensive `README.md` covering every subcommand, flag, NL intent, file convention, helper script, configuration knob, plus 14 common workflows and ~25 troubleshooting scenarios.
