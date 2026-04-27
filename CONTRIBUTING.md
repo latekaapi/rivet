@@ -12,7 +12,7 @@ bash scripts/test-integration.sh
 
 This exercises `design-lint.mjs`, `catalog-components.mjs`, `check-reuse.mjs`, and `similarity.mjs` against self-contained fixtures. A vendored stub at `scripts/test-fixtures/impeccable/` stands in for the real impeccable parser, so you don't need impeccable installed locally to run the smoke test or have it pass in CI.
 
-**2. For non-trivial changes (new features, behavior changes, new subcommands):** walk through the relevant scenarios in [VERIFICATION.md](VERIFICATION.md) on a throwaway test project. Especially relevant if you touch `plan.md`, `run.md`, the design-system pipeline, or any of the helper scripts.
+**2. For non-trivial changes (new features, behavior changes, new subcommands):** walk through the relevant scenarios in [docs/verification-scenarios.md](docs/verification-scenarios.md) on a throwaway test project. Especially relevant if you touch `plan.md`, `run.md`, the design-system pipeline, or any of the helper scripts.
 
 **3. Keep changes scoped.** A PR that touches one subcommand is easier to review than one that retunes three. If a fix exposes adjacent issues, prefer noting them in the PR description over expanding the diff.
 

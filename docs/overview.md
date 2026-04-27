@@ -190,7 +190,7 @@ Claude-only — it's a Claude Code skill. The `/rivet` command, subagent dispatc
   plan.md         — Plan generator (includes --refresh and regenerate modes)
   run.md          — Executor (Stage 0 test re-run, checkpoints, rollback, parallel dispatch)
   review.md       — Senior code review: 16 core points + optional point 17 (impeccable design audit) when frontend files are in scope
-  VERIFICATION.md — Manual test scenarios for feature-level verification (run on a throwaway fixture project)
+  docs/verification-scenarios.md — Manual test scenarios for feature-level verification (run on a throwaway fixture project)
   scripts/
     install.sh              — Copies the skill into ~/.claude/skills/rivet/
     design-lint.mjs         — DESIGN.md validator + changed-file token linter (Stage 2a gate); requires impeccable

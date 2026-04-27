@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Changed
 - **Documentation reorganisation.** The previous README (elevator pitch + supported stacks + FAQ + file structure) moved to `docs/overview.md`. The repo's `README.md` is now the comprehensive guide, since it's the document most readers will want to land on first.
+- `VERIFICATION.md` (24 manual end-to-end test scenarios for contributors) moved to `docs/verification-scenarios.md`. Same content; the rename clarifies its purpose vs the still-at-root `verify.md` (which is the runtime subagent verification protocol — a different file with a similar name). README and CONTRIBUTING references updated.
 - `CONTRIBUTING.md` smoke-test claim tightened to mention the vendored stub (was technically inaccurate before this release).
 - `run.md` Step 0 branch-convention pointer updated to reference `docs/overview.md` (where the original "Branch Strategy" section now lives) alongside the new README's section 5.
 

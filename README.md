@@ -411,11 +411,12 @@ learnings.md      Knowledge capture
 verify.md         Subagent verification protocol
 README.md         This comprehensive guide (top of repo)
 docs/
-  overview.md     Elevator pitch, supported stacks, FAQ, file structure (the brief version)
+  overview.md                Elevator pitch, supported stacks, FAQ, file structure (brief version)
+  verification-scenarios.md  24 manual end-to-end test scenarios
+  assets/                    Static assets (hero image, future visuals)
 CHANGELOG.md      Release history
 CONTRIBUTING.md   Contributor guide
 LICENSE           MIT
-VERIFICATION.md   24 manual end-to-end test scenarios
 scripts/
   install.sh              Install / overwrite
   uninstall.sh            Removal
@@ -1059,7 +1060,7 @@ You're now equipped to use every part of `/rivet`. If you want to dive deeper:
 - [plan.md](plan.md) — the full planning algorithm (Opus model reads this when you `/rivet plan`)
 - [run.md](run.md) — the full execution algorithm (Sonnet model reads this when you `/rivet run`)
 - [review.md](review.md) — every review point with detailed prompts
-- [VERIFICATION.md](VERIFICATION.md) — 24 manual end-to-end test scenarios for verifying skill behaviour
+- [docs/verification-scenarios.md](docs/verification-scenarios.md) — 24 manual end-to-end test scenarios for verifying skill behaviour
 - [docs/overview.md](docs/overview.md) — the elevator pitch + supported stacks + FAQ
 
 For the source of every script: `scripts/*.mjs` and `scripts/*.sh` are all readable, all annotated.
