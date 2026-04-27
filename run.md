@@ -102,6 +102,13 @@ Triggered by "rollback", "rollback to ckpt-2", "revert to last checkpoint", "und
 Triggered by `--skip-verify` anywhere in the args (e.g., `/rivet run main phase-0 --skip-verify`, or `/rivet run main phase-0 task 3 --skip-verify`).
 → On reaching Sub-Plan Design Verification, skip the entire block (audit + critique + harden + polish + optimize subagent dispatch) and go straight to Sub-Plan Transitions. Task-level Stage 2a design enforcement chain (token lint + declaration match + duplicate check) still runs — `--skip-verify` only opts out of the end-of-sub-plan verification pass.
 
+**Run a review-driven fix-plan (spec mode):**
+Triggered by `review` (with or without a slug) immediately after `{spec} {phase}`.
+- With slug: e.g. `/rivet run main phase-2 review pr-42-fix-webhook-signing` → use that slug directly.
+- Without slug: e.g. `/rivet run main phase-2 review` → **infer the slug** per the Slug Inference rule in Step 3.
+
+→ Read sub-plans from `docs/plans/{spec}/{phase}/reviews/{slug}/*.md` instead of `docs/plans/{spec}/{phase}/*.md`. All other behavior (subagent dispatch, verification stages, checkpointing, learnings-scratch) is identical — only the plan source directory changes. Checkpoint tags use the form `rivet/{spec}/{phase}/reviews/{slug}/ckpt-{n}` (the existing tag generator builds tags from the run's branch name, which for review-driven plans is `rivet/{spec}/{phase}/reviews/{slug}`). Any further natural-language tail (`task 3`, `start from task 5`, `rollback`) applies to the review fix-plan, not the parent phase. For ad-hoc-located review plans (no spec lineage), use the standard `adhoc/review-{slug}` target — no `review {slug}` tail is needed.
+
 **Default (no extra context beyond target):**
 → Resume from the next incomplete task and continue sequentially.
 
@@ -111,6 +118,18 @@ Resolve the plan path from the target:
 - `main phase-0` → look in `docs/plans/main/phase-0/`
 - `admin phase-0` → look in `docs/plans/admin/phase-0/`
 - `adhoc/webhook-signing-verification` → look for `docs/plans/adhoc/webhook-signing-verification.md` (single file) or `docs/plans/adhoc/webhook-signing-verification/` (directory with sub-plans)
+- `main phase-2 review pr-42-fix-webhook-signing` → look in `docs/plans/main/phase-2/reviews/pr-42-fix-webhook-signing/` (review-driven fix-plan nested under the parent phase). If the directory is missing: `No review fix-plan found at docs/plans/{spec}/{phase}/reviews/{slug}/. Run /rivet plan --from-review reviews/{spec}/{phase}/{slug}.md first.`
+
+**Slug Inference (when `review` is passed without a slug):**
+
+Scan `docs/plans/{spec}/{phase}/reviews/*/` (non-recursive directory listing). Apply this resolution order:
+
+1. Collect all fix-plan directories whose sub-plans contain at least one task with `status: pending` or `status: in_progress` — call these **active** plans. If exactly one active plan exists → use it. Tell the user: `Inferred review fix-plan: {slug} (has pending tasks).`
+2. If zero active plans exist but exactly one fix-plan directory exists total → use it. Tell the user: `Inferred review fix-plan: {slug}.`
+3. If multiple active plans exist → list their slugs and ask: `Multiple in-progress review fix-plans found for {spec} {phase}. Which one? {slug-a}, {slug-b}, ...` Wait for the user's answer, then re-enter Step 3 with the chosen slug.
+4. If zero fix-plan directories exist → stop with: `No review fix-plans found for {spec} {phase}. Run /rivet plan --from-review reviews/{spec}/{phase}/{review-file}.md first.`
+
+For ad-hoc-scoped review plans: the argument `adhoc/review` (without a slug suffix) triggers the same logic over `docs/plans/adhoc/review-*/` directories. The global shorthand `/rivet run review` (inferring both phase and spec) is intentionally not supported — too ambiguous when multiple specs or phases have in-progress reviews.
 
 If neither a matching file nor directory exists:
 - spec mode: "No plans found for `{spec} {phase}`. Run `/rivet plan {spec} {phase}` first."
@@ -118,7 +137,7 @@ If neither a matching file nor directory exists:
 
 If a single plan file: execute its tasks directly.
 If a directory with multiple sub-plans: determine which to execute:
-1. Parse each sub-plan's YAML frontmatter and look for entries with `status: pending` or `status: in_progress`
+1. Parse each sub-plan's YAML frontmatter and look for entries with `status: pending` or `status: in_progress`. List `*.md` non-recursively — `docs/plans/{spec}/{phase}/reviews/` is a sibling directory of the phase's sub-plans and must NOT be scanned when running the parent phase. Review fix-plans run only when the user passes the `review {slug}` tail.
 2. Start with the first sub-plan that has non-done tasks
 3. Tell the user: "Resuming from `{sub-plan-file}` — {n} tasks remaining. Starting at Task {next-incomplete}."
 
@@ -482,19 +501,16 @@ When `/rivet run` is invoked and there's an in-progress plan:
 
 ## Rollback
 
-Invoked as `/rivet run {spec} {phase} rollback` (or `/rivet run {spec} {phase} rollback {tag}` to target a specific checkpoint). For ad-hoc: `/rivet run adhoc/{name} rollback`.
+Invoked as `/rivet run {spec} {phase} rollback` (or `/rivet run {spec} {phase} rollback {tag}` to target a specific checkpoint). For ad-hoc: `/rivet run adhoc/{name} rollback`. For a review-driven fix-plan: `/rivet run {spec} {phase} review {slug} rollback` — scoped to that fix-plan's checkpoints only.
 
 This is a destructive operation. Always confirm with the user before running `git reset --hard`.
 
-1. List available checkpoints. spec mode:
-   ```bash
-   git tag --list 'rivet/{spec}/{phase}/*' --sort=-creatordate
-   ```
-   Ad-hoc mode:
-   ```bash
-   git tag --list 'rivet/adhoc/{name}/*' --sort=-creatordate
-   ```
-   Show the most recent 5 with commit date + commit subject for context.
+1. List available checkpoints. Pick the pattern that matches the run target:
+   - Spec phase: `git tag --list 'rivet/{spec}/{phase}/ckpt-*' --sort=-creatordate`
+   - Spec phase review fix-plan: `git tag --list 'rivet/{spec}/{phase}/reviews/{slug}/ckpt-*' --sort=-creatordate`
+   - Ad-hoc: `git tag --list 'rivet/adhoc/{name}/ckpt-*' --sort=-creatordate`
+
+   Use the literal `ckpt-*` suffix (not `*`) so a phase rollback doesn't accidentally surface review-fix checkpoints nested under it. Show the most recent 5 with commit date + commit subject for context.
 
 2. Determine target:
    - If user passed a specific tag → use it.

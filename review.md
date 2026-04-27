@@ -4,10 +4,13 @@
 
 Parse the arguments to determine what to review:
 
-- **(no args):** Review files changed since the last review commit marker, or since the last `git tag` matching `review-*`, or fall back to `git diff main --name-only`. If none of these work, ask the user.
-- **file paths:** Review only the specified files.
-- **`--full`:** Review the entire codebase (slow — warn the user).
-- **branch name:** Review all changes on that branch vs main.
+- **(no args):** Review files changed since the last review commit marker, or since the last `git tag` matching `review-*`, or fall back to `git diff main --name-only`. If none of these work, ask the user. Scope shape = `default`.
+- **file paths:** Review only the specified files. Scope shape = `files`; capture the first file path for filename derivation.
+- **`--full`:** Review the entire codebase (slow — warn the user). Scope shape = `full`.
+- **branch name:** Review all changes on that branch vs main. Scope shape = `branch`; capture the branch name.
+- **PR number (`pr 123`, `pr-123`, `#123`, or `--pr 123`):** Fetch metadata via `gh pr view <n> --json number,title,headRefName,baseRefName` and the diff via `gh pr diff <n>`. The diff is the review scope. Scope shape = `pr`; capture `{number, title, headRefName}` for use in Step 6 (filename) and Step 7 (offer-to-fix prompt). Stop with a clear error if `gh` isn't installed or the PR isn't accessible — don't silently degrade.
+
+Capture the resolved scope shape (`pr | branch | files | full | default`) and any metadata the filename will need (PR number/title, branch name, first file path) — Step 6 reads these to derive the save path.
 
 ## Step 2: Load Project Context
 
@@ -227,22 +230,116 @@ If the trigger doesn't fire (no frontend files in scope, or PRODUCT.md / DESIGN.
 - Only P2/P3 → COMMENT (proceed at your discretion)
 - Nothing found → APPROVE
 
-## Step 6: Offer to Fix
+## Step 6: Save Report to `reviews/`
 
-After presenting the report:
+Every `/rivet review` run persists its report to disk so reviews become durable artifacts (linkable, diffable, re-readable) instead of vanishing with the conversation. This step is unconditional — no opt-out flag in v1.
+
+Reports are stratified by detected scope so multi-spec repos don't pile every review into a flat directory. Lineage detection mirrors the helper documented in [plan.md](plan.md) Review-Source Mode Step B (single source of truth — keep both implementations consistent).
+
+1. **Resolve lineage from the reviewed branch.** Determine the relevant branch:
+   - `pr` scope → `headRefName` from the `gh pr view` call in Step 1.
+   - `branch` scope → the branch name argument.
+   - `default` scope → current branch (`git rev-parse --abbrev-ref HEAD`).
+   - `files` and `full` scope → no branch context; skip the helper.
+
+   Then classify (same helper as plan.md):
+
+   ```
+   helper(branch_string) → {kind, ...}:
+     if branch_string matches "rivet/{X}/{Y}" AND {X} in spec_names AND {Y} is a phase in spec {X}:
+         return { kind: "spec", spec: X, phase_id: Y }
+     elif branch_string matches "rivet/adhoc/{name}":
+         return { kind: "adhoc", name: name }
+     else:
+         return { kind: "none" }
+   ```
+
+   Discover `spec_names` the same way [plan.md](plan.md) Step 1 does (`docs/specs/*.md`, falling back to root `spec.md`).
+
+2. **Compute the directory** from the helper result + scope shape:
+
+   | Helper / scope result | Directory |
+   |---|---|
+   | `kind: spec` | `reviews/{spec}/{phase-id}/` |
+   | `kind: adhoc` | `reviews/adhoc/{name}/` |
+   | `kind: none`, scope = `branch` | `reviews/branch/` |
+   | scope = `files` | `reviews/files/` |
+   | scope = `full` | `reviews/full/` |
+   | scope = `default`, helper = `none` | `reviews/default/` |
+
+   Create the directory with `mkdir -p <directory>` if missing.
+
+3. **Derive the filename** from the scope shape captured in Step 1 (filename only — no `reviews/` prefix; that comes from Step 6.2):
+
+   | Scope | Filename pattern |
+   |---|---|
+   | `pr` | `pr-{number}-{kebab(title, ≤50 chars)}.md` |
+   | `branch` | `branch-{kebab(branch)}-{YYYY-MM-DD}.md` |
+   | `files` | `files-{YYYY-MM-DD}-{kebab(basename of first file, no extension)}.md` |
+   | `full` | `full-{YYYY-MM-DD}.md` |
+   | `default` (no args) | `changes-{YYYY-MM-DD}-{kebab(current branch)}.md` |
+
+   Full path = `<directory from Step 6.2>/<filename from Step 6.3>`. Example: `reviews/main/phase-2/pr-42-fix-webhook-signing.md` (lineage detected) or `reviews/full/full-2026-04-27.md` (no lineage).
+
+4. **Kebab rule.** Lowercase; replace runs of non-alphanumeric chars with `-`; trim leading/trailing `-`; collapse repeats. PR-title truncation cuts at the last word boundary that keeps total length ≤50 chars.
+
+5. **Collision handling.** If the target path already exists, append `-2`, `-3`, … before `.md` until the path is free. **Never overwrite** — prior reviews are evidence and shouldn't disappear. Existing flat `reviews/*.md` files from before this change stay untouched (plan's argument parser glob `reviews/**/*.md` catches both old and new locations).
+
+6. **Write the report.** Prepend a YAML frontmatter block to the markdown produced in Step 5:
+
+   ```yaml
+   ---
+   scope: pr | branch | files | full | default
+   pr_number: <n>            # only when scope = pr
+   pr_title: "<title>"       # only when scope = pr
+   branch: <name>            # when scope = pr | branch | default
+   files: [path1, path2]     # only when scope = files
+   date: YYYY-MM-DD
+   verdict: APPROVE | REQUEST CHANGES | COMMENT
+   findings: { p0: n, p1: n, p2: n, p3: n }
+   lineage_kind: spec | adhoc | none   # result of Step 6.1 helper
+   lineage_spec: <name>      # only when lineage_kind: spec
+   lineage_phase: <phase-id> # only when lineage_kind: spec
+   lineage_adhoc: <name>     # only when lineage_kind: adhoc
+   ---
+   ```
+
+   Followed by the full report body verbatim (the same content shown in the conversation).
+
+7. **Echo the path back to the user** before advancing to Step 7:
+
+   > Saved review to `reviews/main/phase-2/pr-42-fix-webhook-signing.md`.
+
+## Step 7: Offer to Fix (chains into plan/run)
+
+After presenting the report and saving it, offer four options. Choices 1–3 generate a plan via `/rivet plan --from-review` (covered by [plan.md](plan.md) Review-Source Mode); choice 4 stops.
 
 ```
+Review saved to {full review path}.
+
 How would you like to proceed?
 
-1. Fix all — I'll implement all suggested fixes
-2. Fix P0/P1 only — address critical and high priority issues
-3. Fix specific items — tell me which issue numbers to fix
+1. Fix all — generate a plan covering every finding, then run it
+2. Fix P0/P1 only — generate a plan covering critical + high priority
+3. Fix specific items — tell me which finding numbers, then plan + run those
 4. No changes — review complete, moving on
 ```
 
-**Do not implement any fixes until the user explicitly chooses.** This is a review-first workflow.
+**Do not generate the plan or implement fixes until the user explicitly chooses.** This is a review-first workflow.
 
-If fixes are requested:
-- Fix each issue, re-run the relevant tests, commit with message `fix: {description} [review]`
-- After fixing, re-run only the affected review points (not all 17) to verify the fix didn't introduce new issues
-- If a fix introduces a new finding, report it before proceeding
+On choice:
+
+- **1 (Fix all):** invoke `/rivet plan --from-review <full review path>` (no filter flags).
+- **2 (Fix P0/P1 only):** invoke `/rivet plan --from-review <full review path> --max-priority p1`.
+- **3 (Fix specific items):** prompt the user for finding numbers (e.g. `3,7,9`) using the same numbering Step 5 assigned to findings (P0 first, then P1, then P2, then P3, then Removal Candidates — 1-indexed across the entire review). Then invoke `/rivet plan --from-review <full review path> --items <list>`.
+- **4 (No changes):** stop. Review complete.
+
+After plan generation completes, prompt with the lineage-correct run target (the run command echoed by [plan.md](plan.md) Review-Source Mode Step J):
+
+```
+Plan generated. Start <run command> now? [Y/n]
+```
+
+If `Y`, dispatch the run via `/rivet run <args>`. If `n`, leave the plan on disk for later.
+
+**Why chain instead of fix inline?** The plan/run pipeline provides per-task subagent dispatch, verify.md Stage 0–2 verification, checkpoint tags, rollback, resumability after `/clear`, and learnings-scratch capture. An inline fix loop loses all of these. Per-task `fix: ... [review]` commits are still produced — `/rivet run` handles the commit per-task per [run.md](run.md).

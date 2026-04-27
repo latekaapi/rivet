@@ -366,6 +366,7 @@ Skip the entire verification block via `--skip-verify`, no `ui: true` tasks, mis
 | `<file paths>` | `/rivet review src/components/Button.tsx src/lib/api.ts` | Only those files |
 | `<branch>` | `/rivet review feature/x` | All changes on that branch vs main |
 | `--full` | `/rivet review --full` | Entire codebase (slow — warned) |
+| PR number | `/rivet review pr 42` (also accepts `pr-42`, `#42`, `--pr 42`) | The PR diff fetched via `gh pr diff 42`; metadata fetched via `gh pr view 42`. Requires `gh` installed and authenticated. |
 
 **What it reads (Step 2 — load context):**
 - `CLAUDE.md`
@@ -393,11 +394,31 @@ Skip the entire verification block via `--skip-verify`, no `ui: true` tasks, mis
 
 If trigger doesn't fire, point 17 is reported as `N/A ({reason})` in the "Passed Clean" section.
 
-**After the report, you choose:**
-1. Fix all
-2. Fix P0/P1 only
-3. Fix specific items (give numbers)
+**Where the report lands.** Every `/rivet review` run saves its report under `reviews/`, stratified by detected lineage so multi-spec repos don't pile every review into a flat directory. Lineage is detected from the reviewed branch: if it matches `rivet/{spec}/{phase}` (and that spec/phase exists), the report goes under `reviews/{spec}/{phase}/`. Otherwise it lands in a sibling subdirectory keyed by scope shape. Reviews are durable artifacts: linkable, diffable, and re-readable across sessions.
+
+| Scope + lineage | Path pattern | Example |
+|---|---|---|
+| `pr` on `rivet/{spec}/{phase}` branch | `reviews/{spec}/{phase}/pr-{n}-{kebab(title, ≤50)}.md` | `reviews/main/phase-2/pr-42-fix-webhook-signing.md` |
+| `pr` on `rivet/adhoc/{name}` branch | `reviews/adhoc/{name}/pr-{n}-{kebab(title)}.md` | `reviews/adhoc/webhook-signing/pr-42-...md` |
+| `pr` on a non-rivet branch | `reviews/branch/pr-{n}-{kebab(title)}.md` | `reviews/branch/pr-99-third-party-pr.md` |
+| `branch` (any) | `reviews/{lineage-dir or "branch"}/branch-{kebab(branch)}-{YYYY-MM-DD}.md` | `reviews/main/phase-2/branch-rivet-main-phase-2-2026-04-27.md` |
+| `files` | `reviews/files/files-{YYYY-MM-DD}-{kebab(first-file-stem)}.md` | `reviews/files/files-2026-04-27-button.md` |
+| `--full` | `reviews/full/full-{YYYY-MM-DD}.md` | `reviews/full/full-2026-04-27.md` |
+| (no args) | `reviews/{lineage-dir or "default"}/changes-{YYYY-MM-DD}-{kebab(branch)}.md` | `reviews/default/changes-2026-04-27-main.md` |
+
+Each saved file starts with a small YAML frontmatter block (scope, PR/branch/files metadata, date, verdict, finding counts by severity, plus `lineage_kind` / `lineage_spec` / `lineage_phase` / `lineage_adhoc` for downstream tooling), followed by the full report markdown verbatim. **Collisions never overwrite** — re-running against the same PR appends `-2`, `-3`, … before `.md`, so the prior review stays intact.
+
+Existing flat `reviews/*.md` files from before stratification keep working. Both layouts are accepted as `/rivet plan --from-review` inputs.
+
+`reviews/` is meant to be committed by default — the directory accrues a history of what was reviewed and when, and is useful for spotting trends (e.g. recurring P1 categories). If you'd rather not commit them, add `reviews/` to `.gitignore`.
+
+**After the report, you choose** (Step 7 chains into the plan/run pipeline — the old inline "fix and commit" loop is gone):
+1. Fix all → generates `/rivet plan --from-review <path>` then offers to start `/rivet run`
+2. Fix P0/P1 only → same plan/run flow, with `--max-priority p1`
+3. Fix specific items → prompts for finding numbers, then `--items <list>` plan/run flow
 4. No changes (review complete)
+
+**Generated fix-plan layout.** When lineage is detected, the fix-plan nests under the parent phase: `docs/plans/{spec}/{phase}/reviews/{slug}/{nn}-{bucket}.md` (one sub-plan per priority bucket — `01-p0`, `02-p1`, `03-p2`, `04-p3`; empty buckets skipped, output renumbered contiguously). Run target: `/rivet run {spec} {phase} review {slug}`. Branch: `rivet/{spec}/{phase}/reviews/{slug}`. Checkpoint tags: `rivet/{spec}/{phase}/reviews/{slug}/ckpt-{n}`. When no lineage is detectable (full / files / non-rivet branch), the fix-plan lives at `docs/plans/adhoc/review-{slug}/`, runs as `/rivet run adhoc/review-{slug}`, and is shown under the Ad-hoc section in `/rivet status` with a `(review)` label.
 
 ### 4.5 `/rivet status`
 

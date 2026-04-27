@@ -75,6 +75,19 @@ first = args[0]
 if first in spec_names:
     spec  = first
     rest = args[1:]
+elif first == "--from-review":
+    # Review-source mode (explicit flag). Path is args[1]; remaining args are filter
+    # flags (--max-priority, --items, --include-removal). Stop with a clear error if
+    # args[1] is missing or doesn't point at an existing file.
+    review_path = args[1]
+    review_args = args[2:]
+    → "review-source"
+elif first matches glob "reviews/**/*.md" AND file exists:
+    # Review-source mode (implicit path). The glob matches both legacy flat
+    # reviews/pr-42-...md and stratified reviews/{spec}/{phase}/pr-42-...md.
+    review_path = first
+    review_args = args[1:]
+    → "review-source"
 elif len(spec_names) == 1 and first not in spec_names:
     # Single-spec shorthand: first arg is treated as the phase (or as a flag/regenerate keyword).
     # Applies whether the lone spec is in docs/specs/ or is a bare spec.md at the project root.
@@ -101,10 +114,13 @@ Resolve the spec path from `spec_files` once `spec` is known (`docs/specs/{spec}
 - `first` is a spec name but `rest[0]` isn't a phase in that spec → list available phases from the spec file and ask.
 - `first` is a spec name and `rest` is empty ("spec-no-phase") → list available phases and ask.
 - `spec_files` empty → already handled in Step 1.
+- `first == "--from-review"` but `args[1]` is missing or doesn't exist on disk → tell the user the path was missing or unreadable and stop. Don't guess.
+- `first` is a path under `reviews/` but the file doesn't exist → same — stop with a clear error.
+- A spec is literally named `reviews` AND the user types `/rivet plan reviews/...` → the `first in spec_names` branch wins (spec mode). To run review-source on such a project, use the explicit `--from-review` flag.
 
 ### Guard: plans already exist for this target
 
-After parsing, in spec mode: check whether `docs/plans/{spec}/{phase}/` already exists with non-empty content. In ad-hoc mode: check `docs/plans/adhoc/{slug}.md` and `docs/plans/adhoc/{slug}/`. If a match exists and the user did NOT pass `--refresh` or `regenerate sub-plan N`:
+After parsing, in spec mode: check whether `docs/plans/{spec}/{phase}/` already exists with non-empty content. In ad-hoc mode: check `docs/plans/adhoc/{slug}.md` and `docs/plans/adhoc/{slug}/`. In review-source mode: check the resolved fix-plan path (see Review-Source Mode below — `docs/plans/{spec}/{phase}/reviews/{slug}/` for spec-lineage, `docs/plans/adhoc/review-{slug}/` otherwise). If a match exists and the user did NOT pass `--refresh` or `regenerate sub-plan N`:
 
 ```
 Plans already exist for {spec} {phase}. Options:
@@ -137,6 +153,140 @@ The user is describing work that isn't in any spec. Before planning:
 
 Plan output for ad-hoc tasks goes to: `docs/plans/adhoc/{kebab-case-name}.md`
 (or `docs/plans/adhoc/{name}/01-*.md` if split into multiple sub-plans)
+
+### Review-Source Mode
+
+The user has a saved review file (from `/rivet review`) and wants to convert its findings into an executable plan. Each finding becomes a task; sub-plans split by priority bucket.
+
+#### Step A: Read the review file
+
+Open `review_path` and parse:
+- YAML frontmatter: `scope`, `pr_number`, `pr_title`, `branch`, `verdict`, `findings`, `date`.
+- Markdown body sections: `## P0 — Critical`, `## P1 — High`, `## P2 — Medium`, `## P3 — Low`, `## Removal Candidates`. Within each, parse individual findings (review point # + name, file:line, what's wrong, fix recommendation).
+
+If frontmatter is missing or malformed, stop with: `Review file at {path} is missing required YAML frontmatter (expected scope, branch, verdict, findings). Re-run /rivet review or fix the frontmatter manually.` Don't synthesize a plan from an unparsed file.
+
+#### Step B: Resolve lineage (shared scope-detection helper)
+
+Given the review's `branch:` value, classify into one of three kinds:
+
+```
+helper(branch_string) → {kind, ...}:
+  if branch_string matches "rivet/{X}/{Y}" AND {X} in spec_names AND {Y} is a phase in spec {X}:
+      return { kind: "spec", spec: X, phase_id: Y }
+  elif branch_string matches "rivet/adhoc/{name}":
+      return { kind: "adhoc", name: name }
+  else:
+      return { kind: "none" }
+```
+
+The same helper is invoked by [review.md](review.md) Step 6 to stratify the review file path on save — keep the implementation consistent across both subcommands.
+
+#### Step C: Resolve plan path, branch, and run target from lineage
+
+| Helper result | Plan output dir | Branch | Run target |
+|---|---|---|---|
+| `kind: spec` | `docs/plans/{spec}/{phase}/reviews/{slug}/{nn}-{bucket}.md` | `rivet/{spec}/{phase}/reviews/{slug}` | `/rivet run {spec} {phase} review {slug}` |
+| `kind: adhoc` | `docs/plans/adhoc/review-{slug}/{nn}-{bucket}.md` | `rivet/adhoc/review-{slug}` | `/rivet run adhoc/review-{slug}` |
+| `kind: none` | `docs/plans/adhoc/review-{slug}/{nn}-{bucket}.md` | `rivet/adhoc/review-{slug}` | `/rivet run adhoc/review-{slug}` |
+
+`{slug}` derives from the review filename: take the basename, strip the `.md` extension, lowercase and kebab-case (existing rule from [review.md](review.md) Step 6.3). Example: `reviews/main/phase-2/pr-42-fix-webhook-signing.md` → `slug = pr-42-fix-webhook-signing`.
+
+#### Step D: Apply filter flags
+
+Parse `review_args` for:
+- `--max-priority p0|p1|p2|p3` — drop findings below that level. Default: include all.
+- `--items 3,7,9` — include only listed finding numbers. Numbers are 1-indexed across the entire review (count P0 findings first, then P1, then P2, then P3, then Removal Candidates).
+- `--include-removal=false` — drop the Removal Candidates section. Default: include.
+
+Build a working `findings[]` list from the parsed sections after applying filters.
+
+#### Step E: Skip ad-hoc clarification questions
+
+The Ad-Hoc Mode "Clarify scope" AskUserQuestion block (Step 1 above) is **skipped** in review-source mode. The review file is already structured input — extra questions are friction.
+
+#### Step F: Run targeted research
+
+Findings already cite `file:line`, so skip the broad ad-hoc research. Dispatch only:
+
+- **Codebase agent (focused):** read every cited file in full; map immediate dependents (mirrors [review.md](review.md) Step 3).
+- **Cross-spec agent (always, when `spec_files` is non-empty):** re-use the spec-mode Cross-spec agent definition below in Step 3 — crucial in multi-spec repos: a finding might cross spec boundaries.
+
+Skip web research and dependency agent — fixes work within the existing stack.
+
+#### Step G: Group findings into priority buckets
+
+```
+01-p0   ← all P0 findings (skip if empty)
+02-p1   ← all P1 findings + Removal Candidates marked "safe to delete now"
+03-p2   ← all P2 findings + Removal Candidates marked "defer with plan"
+04-p3   ← all P3 findings (skip if empty)
+```
+
+Skip empty buckets entirely (no zero-task file). Renumber after skipping so output is always contiguous (`01`, `02`, `03`).
+
+#### Step H: Skip Step 4's split-approval prompt
+
+The split is mechanical and predictable — no user confirmation needed. Announce the resulting structure inline (see Step J).
+
+#### Step I: Generate one sub-plan per bucket
+
+Each sub-plan file follows the standard schema (Step 5 below) with these frontmatter additions per task:
+
+```yaml
+  - id: {n}
+    title: "{finding short description, ≤60 chars}"
+    estimated_min: {15 for P3, 20 for P2, 25 for P1, 35 for P0}
+    depends_on: [...]                       # populate when two findings cite the same file
+    files: [{cited paths}]
+    status: pending
+    origin: review                          # alongside existing 'audit' from Step 6
+    priority: p0 | p1 | p2 | p3 | removal
+    review_point: {1–17}
+    review_source: {review_path}
+    lineage_kind: spec | adhoc | none
+    lineage_spec: {spec}                    # only when lineage_kind: spec
+    lineage_phase: {phase}                  # only when lineage_kind: spec
+    # ui / surface / register / ui_commands set normally if the file is a frontend surface
+    # (re-uses Step 3.5/Step 6 logic so design-lint still gates the fix).
+```
+
+Task body shape per finding:
+
+```markdown
+### Task N: {finding title}
+
+**Files:** {cited paths}
+**Source:** {review file}, finding #{N}, review point {1–17 name}
+**Priority:** P0 / P1 / P2 / P3 / Removal Candidate
+
+**What's wrong:** {verbatim from review}
+
+**Fix:**
+{verbatim "concrete fix recommendation" from review}
+
+**Verification:**
+- Re-run the test(s) in {affected test file(s)}
+- Re-run review point {N} on the affected file (mirrors [review.md](review.md) Step 7's
+  "re-run only the affected review points" guidance)
+```
+
+#### Step J: Echo the result
+
+Print the resolved location and the lineage-correct run command:
+
+```
+Generated review-driven plan at docs/plans/main/phase-2/reviews/pr-42-fix-webhook-signing/
+  01-p0.md  (2 tasks, ~70 min)
+  02-p1.md  (4 tasks, ~100 min)
+  03-p2.md  (3 tasks, ~60 min)
+  04-p3.md  (1 task,  ~15 min)
+
+Lineage: main / phase-2 (detected from review frontmatter)
+Run: /rivet run main phase-2 review pr-42-fix-webhook-signing
+```
+
+When `kind: adhoc` or `kind: none`, the run command is `/rivet run adhoc/review-{slug}` and the lineage line shows `Lineage: ad-hoc (no spec/phase detected from {branch_value or "review scope"})`.
 
 ### Refresh Mode
 
@@ -316,9 +466,17 @@ tasks:
     surface: default   # name from PRODUCT.md's ## Surfaces, or 'default'
     register: product  # brand | product — inherited from surface
     ui_commands: []    # subset of [typeset, layout, colorize, adapt, animate, clarify, onboard, distill]
-    # Origin tag (set to 'audit' for tasks injected by post-sub-plan verification)
+    # Origin tag (set to 'audit' for tasks injected by post-sub-plan verification,
+    # or 'review' for tasks generated from a review file via Review-Source Mode)
     # origin: audit
     # depends_on may point back at the UI task that produced a flagged file
+    # Review-source-only fields (present when origin: review):
+    # priority: p0 | p1 | p2 | p3 | removal
+    # review_point: 1–17                 # which review.md point raised the finding
+    # review_source: reviews/.../foo.md  # path to the review file this task came from
+    # lineage_kind: spec | adhoc | none  # what the review's branch resolved to
+    # lineage_spec: <spec name>          # only when lineage_kind: spec
+    # lineage_phase: <phase id>          # only when lineage_kind: spec
   - id: 2
     title: Build pricing card component
     estimated_min: 25
@@ -669,7 +827,7 @@ design_extends:
   - `canonical_sha` changed but ref/product didn't → user manually edited the canonical brief. Warn, then re-enrich non-done tasks in that surface.
   - `override_sha` changed → user edited the override. Re-enrich non-done tasks in that surface only.
   - Nothing changed → skip.
-- **`regenerate sub-plan N`:** preserves tasks with `origin: audit` in their frontmatter by default. Warn the user if regenerating a sub-plan that contains `origin: audit` tasks — they represent verification-driven follow-up work.
+- **`regenerate sub-plan N`:** preserves tasks with `origin: audit` or `origin: review` in their frontmatter by default. Warn the user if regenerating a sub-plan that contains either — `audit` tasks represent verification-driven follow-up work, `review` tasks trace back to a specific review file (preserve `review_source` so the lineage stays intact).
 
 ### 6.6 Skip-with-note cases
 
