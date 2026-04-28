@@ -263,36 +263,91 @@ Reports are stratified by detected scope so multi-spec repos don't pile every re
 
    > Saved review to `docs/reviews/main/phase-2/pr-42-fix-webhook-signing.md`.
 
-## Step 7: Offer to Fix (chains into plan/run)
+## Step 7: Present Next-Step Commands (chains into plan/run)
 
-After presenting the report and saving it, offer four options. Choices 1–3 generate a plan via `/rivet plan --from-review` (covered by [plan.md](plan.md) Review-Source Mode); choice 4 stops.
+After the report is shown and saved, output a **copy-paste-friendly command block** so the user can turn findings into a fix-plan with one paste. The block adapts to what was found.
+
+### 7.1 Three branches based on findings
+
+**Branch A — Nothing found (only "Passed Clean"):**
+
+```
+Nothing to fix — review clean.
+
+Review saved to {full review path}.
+```
+
+Stop here. Do not show fix-plan commands.
+
+**Branch B — Only P3 findings (low-priority style/naming):**
 
 ```
 Review saved to {full review path}.
 
-How would you like to proceed?
+Only {n} low-priority (P3) suggestions — no blockers, no required fixes.
 
-1. Fix all — generate a plan covering every finding, then run it
-2. Fix P0/P1 only — generate a plan covering critical + high priority
-3. Fix specific items — tell me which finding numbers, then plan + run those
-4. No changes — review complete, moving on
+If you want to address them anyway:
+
+    /rivet plan --from-review {full review path}
 ```
 
-**Do not generate the plan or implement fixes until the user explicitly chooses.** This is a review-first workflow.
+Stop after the optional command. Do not also offer P0/P1 or `--items` variants — they don't apply.
+
+**Branch C — Anything P0 / P1 / P2 present:** the headline + variants block (Step 7.2 below).
+
+### 7.2 Headline + variants block
+
+Compute, before printing:
+
+- `total` — total finding count across P0 + P1 + P2 + P3 + Removal Candidates
+- `blockers` — P0 + P1 count
+- `present_priorities` — chain like `P0 → P1 → P2 → P3` listing only the levels that have at least one finding
+- `cherry_pick_sample` — the first 3–4 finding numbers in priority order (e.g., `1,2,3,4` if P0 has findings 1–2 and P1 has findings 3–4); if `blockers > 0`, prefer those numbers; otherwise pick the first 3–4 of whatever's present
+
+Then output exactly this block (substitute `{ }` placeholders verbatim):
+
+```
+Review saved to {full review path}.
+
+Run this command — it picks up the review file and generates a fix-plan automatically:
+
+    /rivet plan --from-review {full review path}
+
+Variants:
+
+    # All {total} findings ({present_priorities}):
+    /rivet plan --from-review {full review path}
+
+    {if blockers > 0:}
+    # P0+P1 only (the {blockers} blocker{s if plural} — fastest path to merge):
+    /rivet plan --from-review {full review path} --max-priority p1
+
+    # Cherry-pick specific findings (e.g. just findings {cherry_pick_sample}):
+    /rivet plan --from-review {full review path} --items {cherry_pick_sample}
+```
+
+The `# P0+P1 only` variant is omitted if `blockers == 0` (no P0/P1 findings — going straight to "Fix all" or cherry-picking P2 makes more sense).
+
+The `# Cherry-pick` example uses real finding numbers from the actual review (computed above) so users can paste it as-is to fix the most important items first.
+
+### 7.3 Optional shortcut prompt
+
+After the variants block, offer an inline shortcut for users who'd rather not copy-paste:
+
+```
+Or pick one to run now: [1] Fix all  [2] P0+P1 only  [3] Specific items  [Enter] Skip
+```
+
+(Show option `[2]` only when `blockers > 0`. Show `[3]` only when `total > 1` — cherry-picking from a single finding is silly.)
 
 On choice:
+- **1:** invoke `/rivet plan --from-review <full review path>`
+- **2:** invoke `/rivet plan --from-review <full review path> --max-priority p1`
+- **3:** prompt for finding numbers (same numbering Step 5 used — P0 first, then P1, then P2, then P3, then Removal Candidates, 1-indexed across the whole review), then invoke `/rivet plan --from-review <full review path> --items <list>`
+- **Enter / no choice:** stop. The user has the commands above to run later.
 
-- **1 (Fix all):** invoke `/rivet plan --from-review <full review path>` (no filter flags).
-- **2 (Fix P0/P1 only):** invoke `/rivet plan --from-review <full review path> --max-priority p1`.
-- **3 (Fix specific items):** prompt the user for finding numbers (e.g. `3,7,9`) using the same numbering Step 5 assigned to findings (P0 first, then P1, then P2, then P3, then Removal Candidates — 1-indexed across the entire review). Then invoke `/rivet plan --from-review <full review path> --items <list>`.
-- **4 (No changes):** stop. Review complete.
+**Do not generate the plan automatically.** The shortcut is opt-in. Pasting one of the variants from 7.2 is the primary path.
 
-After plan generation completes, prompt with the lineage-correct run target (the run command echoed by [plan.md](plan.md) Review-Source Mode Step J):
-
-```
-Plan generated. Start <run command> now? [Y/n]
-```
-
-If `Y`, dispatch the run via `/rivet run <args>`. If `n`, leave the plan on disk for later.
+After plan generation completes (via shortcut or via the user pasting a variant), [plan.md](plan.md) Review-Source Mode Step J echoes the lineage-correct `/rivet run` target. Plan.md handles that prompt — review.md is done once it has presented Step 7 output.
 
 **Why chain instead of fix inline?** The plan/run pipeline provides per-task subagent dispatch, verify.md Stage 0–2 verification, checkpoint tags, rollback, resumability after `/clear`, and learnings-scratch capture. An inline fix loop loses all of these. Per-task `fix: ... [review]` commits are still produced — `/rivet run` handles the commit per-task per [run.md](run.md).

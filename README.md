@@ -417,11 +417,36 @@ Existing flat `reviews/*.md` files from before stratification keep working. Both
 
 `reviews/` is meant to be committed by default — the directory accrues a history of what was reviewed and when, and is useful for spotting trends (e.g. recurring P1 categories). If you'd rather not commit them, add `reviews/` to `.gitignore`.
 
-**After the report, you choose** (Step 7 chains into the plan/run pipeline — the old inline "fix and commit" loop is gone):
-1. Fix all → generates `/rivet plan --from-review <path>` then offers to start `/rivet run`
-2. Fix P0/P1 only → same plan/run flow, with `--max-priority p1`
-3. Fix specific items → prompts for finding numbers, then `--items <list>` plan/run flow
-4. No changes (review complete)
+**After the report, you get copy-pasteable next-step commands** (Step 7 chains into the plan/run pipeline — the old inline "fix and commit" loop is gone):
+
+```
+Review saved to docs/reviews/extension/phase-0/changes-2026-04-28-rivet-extension-phase-0.md.
+
+Run this command — it picks up the review file and generates a fix-plan automatically:
+
+    /rivet plan --from-review docs/reviews/extension/phase-0/changes-2026-04-28-rivet-extension-phase-0.md
+
+Variants:
+
+    # All 15 findings (P1 → P2 → P3):
+    /rivet plan --from-review docs/reviews/extension/phase-0/changes-2026-04-28-rivet-extension-phase-0.md
+
+    # P0+P1 only (the 3 blockers — fastest path to merge):
+    /rivet plan --from-review docs/reviews/extension/phase-0/changes-2026-04-28-rivet-extension-phase-0.md --max-priority p1
+
+    # Cherry-pick specific findings (e.g. just findings 1,2,3,4):
+    /rivet plan --from-review docs/reviews/extension/phase-0/changes-2026-04-28-rivet-extension-phase-0.md --items 1,2,3,4
+
+Or pick one to run now: [1] Fix all  [2] P0+P1 only  [3] Specific items  [Enter] Skip
+```
+
+The block adapts to what was found:
+- **Nothing to fix** → "Review clean." (no command)
+- **Only P3 findings** → optional "Fix all" command, no P0/P1 variant
+- **P0/P1 present** → all three variants, with the `# P0+P1 only` variant labeled with the actual blocker count
+- **No P0/P1** → omits the `# P0+P1 only` variant (P2 cherry-picking is more useful)
+
+The `# Cherry-pick` example uses real finding numbers from the report so it pastes cleanly. The shortcut prompt is optional — pasting one of the variants is the primary path.
 
 **Generated fix-plan layout.** When lineage is detected, the fix-plan nests under the parent phase: `docs/plans/{spec}/{phase}/reviews/{slug}/{nn}-{bucket}.md` (one sub-plan per priority bucket — `01-p0`, `02-p1`, `03-p2`, `04-p3`; empty buckets skipped, output renumbered contiguously). Run target: `/rivet run {spec} {phase} review {slug}`. Branch: `rivet/{spec}/{phase}/reviews/{slug}`. Checkpoint tags: `rivet/{spec}/{phase}/reviews/{slug}/ckpt-{n}`. When no lineage is detectable (full / files / non-rivet branch), the fix-plan lives at `docs/plans/adhoc/review-{slug}/`, runs as `/rivet run adhoc/review-{slug}`, and is shown under the Ad-hoc section in `/rivet status` with a `(review)` label.
 
