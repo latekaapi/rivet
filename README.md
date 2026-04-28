@@ -129,7 +129,7 @@ docs/plans/main/             ← /rivet plan writes here
     learnings-scratch.md     ← in-flight notes during /rivet run
 ```
 
-Each sub-plan file has a YAML frontmatter listing its tasks (id, title, status, files, depends_on, etc.) plus a `### Task N` markdown block per task with steps, code, expected output. `/rivet run` walks the YAML, dispatches subagents per task, re-verifies tests (Stage 0), reviews quality (Stage 2), checkpoints every 5 tasks (full test suite + git tag).
+Each sub-plan file has a YAML frontmatter listing its tasks (id, title, status, files, depends_on, etc.) plus a `### Task N` markdown block per task with steps, code, expected output. `/rivet run` walks the YAML, dispatches subagents per task, re-verifies tests (Stage 0), reviews quality (Stage 2), checkpoints every N tasks (default: 3, configurable via `checkpointEvery` in `rivet.config.json`).
 
 Ad-hoc work that doesn't belong to any spec uses a parallel layout under `docs/plans/adhoc/`.
 
@@ -246,7 +246,7 @@ The router is `/rivet [subcommand] [args]`. Calling `/rivet` alone (or with an u
 
 ### 4.2 `/rivet run`
 
-**Purpose.** Execute the plan via subagent dispatch with three-stage review per task, checkpoints every 5 tasks, optional design verification at the end of each sub-plan. Resumes intelligently — re-running just `/rivet run main phase-0` continues from the next incomplete task.
+**Purpose.** Execute the plan via subagent dispatch with three-stage review per task, checkpoints every N tasks (default: 3), optional design verification at the end of each sub-plan. Resumes intelligently — re-running just `/rivet run main phase-0` continues from the next incomplete task.
 
 **Argument shapes:**
 
@@ -301,7 +301,7 @@ Each subagent does NOT get the full plan, the spec, prior task results, or conve
 2. `/rivet plan {spec} {phase} --refresh`
 3. Continue anyway
 
-**Checkpointing.** Every 5 completed tasks, run the **full test suite** (regression catch). On pass, tag the tree:
+**Checkpointing.** Every N completed tasks (default: 3, set `checkpointEvery` in `rivet.config.json`), run the **full test suite** (regression catch). On pass, tag the tree:
 ```bash
 git tag rivet/{spec}/{phase}/ckpt-{n}    # spec mode
 git tag rivet/adhoc/{name}/ckpt-{n}      # ad-hoc mode
@@ -614,7 +614,7 @@ spec.md                                         Optional, single-spec fallback a
 
 **Branch convention:** `rivet/{spec}/{phase-id}` for spec phases, `rivet/adhoc/{name}` for ad-hoc work. The pre-flight check offers to create the branch when you're on `main` / `master`.
 
-**Checkpoint tags:** `rivet/{spec}/{phase-id}/ckpt-{n}` (or `rivet/adhoc/{name}/ckpt-{n}`). One per checkpoint (every 5 completed tasks). Rollback targets.
+**Checkpoint tags:** `rivet/{spec}/{phase-id}/ckpt-{n}` (or `rivet/adhoc/{name}/ckpt-{n}`). One per checkpoint (every N completed tasks, default: 3). Rollback targets.
 
 ---
 
@@ -877,12 +877,14 @@ bash scripts/test-integration.sh
 | `CLAUDE_HOME` | env var | `~/.claude` | Install destination root for `install.sh` / `uninstall.sh` |
 | `componentRoots` | `rivet.config.json` at project root | auto-detected | Override the dirs `catalog-components.mjs` scans |
 | `--roots` | CLI flag on `catalog-components.mjs` | (uses config or auto) | One-off override |
+| `checkpointEvery` | `rivet.config.json` at project root | `3` | How many completed tasks trigger a full-suite run + git tag |
 
 Example `rivet.config.json`:
 
 ```json
 {
-  "componentRoots": ["packages/ui/src", "apps/web/components"]
+  "componentRoots": ["packages/ui/src", "apps/web/components"],
+  "checkpointEvery": 3
 }
 ```
 
@@ -1186,7 +1188,7 @@ The skill isn't installed at the resolved DEST. If you used a non-default `CLAUD
 | **Sub-plan** | A 4–8-hour-sized chunk of a phase, written by `/rivet plan` to `docs/plans/{spec}/{phase}/{nn}-{name}.md`. Has YAML frontmatter listing tasks. |
 | **Task** | A 2–5-minute micro-step within a sub-plan. Has YAML frontmatter (id, status, files, depends_on, etc.) and a `### Task N` markdown body. |
 | **Ad-hoc** | Work that doesn't belong to any spec. Plans live under `docs/plans/adhoc/`, branches under `rivet/adhoc/{name}`. |
-| **Checkpoint** | After every 5 completed tasks, a full test suite run + git tag (`rivet/{spec}/{phase}/ckpt-{n}`). The rollback target. |
+| **Checkpoint** | After every N completed tasks (default: 3, configurable via `checkpointEvery` in `rivet.config.json`), a full test suite run + git tag (`rivet/{spec}/{phase}/ckpt-{n}`). The rollback target. |
 | **Surface** | A logical UI area (`marketing`, `dashboard`, `admin`) defined in `PRODUCT.md`'s `## Surfaces` section. Maps file paths to register + design_ref. |
 | **Register** | `brand` or `product` — voice / treatment dimension. Drives which impeccable reference is loaded for audit + critique. |
 | **Canonical brief** | Per-surface design brief at `docs/design/brief-{surface}.md`. Project-wide, shared across every spec. |

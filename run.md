@@ -341,7 +341,9 @@ Reset the counter to zero on any successful task (no fix needed). A single isola
 
 ### Checkpointing
 
-After every **5 completed tasks**, run the **full test suite** before pausing. This catches regressions — task 8 might break something from task 2 that the per-task test didn't cover.
+Read `checkpointEvery` from `rivet.config.json` at the project root (if the file exists). Default to **3** if the key is absent or the file doesn't exist.
+
+After every **`checkpointEvery` completed tasks**, run the **full test suite** before pausing. This catches regressions — task 8 might break something from task 2 that the per-task test didn't cover.
 
 ```bash
 # Run the project's full test suite — exact command comes from CLAUDE.md.
@@ -372,20 +374,18 @@ Completed since last checkpoint:
   ✓ Task {a}: {title}
   ✓ Task {b}: {title}
   ✓ Task {c}: {title}
-  ✓ Task {d}: {title}
-  ✓ Task {e}: {title}
 
 Issues encountered: {any review failures, fixes applied, regressions caught}
 
-Next 5 tasks:
-  → Task {f}: {title}
-  → Task {g}: {title}
+Next {checkpointEvery} tasks:
+  → Task {d}: {title}
+  → Task {e}: {title}
   → ...
 
 Continue? (y / pause / review)
 ```
 
-- **y** or **continue**: proceed with next 5 tasks
+- **y** or **continue**: proceed with next batch
 - **pause**: stop here, save progress, session can resume later
 - **review**: run `/rivet review` on changes so far before continuing
 
