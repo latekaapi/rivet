@@ -121,56 +121,9 @@ Check: can you understand what a class does from its name alone? Are method name
 - both `PRODUCT.md` and `DESIGN.md` exist at the project root
 - the [impeccable](https://github.com/pbakaus/impeccable) skill is installed at `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/`
 
-If any condition fails, emit a one-line note in the review report (`Point 17 skipped: <reason>.`) and complete the review with points 1–16 only.
+If any condition fails, emit a one-line note in the review report (`Point 17 skipped: <reason>.`) and complete the review with points 1–16 only. Note it in the "Passed Clean" section as `17. Design System Compliance — N/A ({reason})`. Do not hard-fail the review when design files are missing; treat it as non-applicable.
 
-When triggered:
-
-1. **Mechanical token lint.** For each frontend file in scope, resolve its surface (match file path against `PRODUCT.md`'s `## Surfaces` routes; default if absent), then run:
-
-   ```bash
-   node ${CLAUDE_SKILL_DIR}/scripts/design-lint.mjs \
-     --design <surface design_ref> \
-     --files <in-scope files for that surface>
-   ```
-
-   Any violations become **P1** findings (hardcoded hex, off-scale px/rem, unknown font-family).
-
-2. **Resolve the brief for each surface.** Group the in-scope files by surface. For each surface, resolve a brief using this chain and cache for the duration of this review:
-
-   ```
-   a. If docs/design/brief-{surface}.md exists → use it (canonical, gap-1 design).
-      If a phase-specific override docs/plans/{phase}/design-brief-{surface}.md is locatable
-      (review scope covers one phase), compose override on top.
-   b. Else if docs/plans/{phase}/design-brief-{surface}.md exists → use it.
-   c. Else → derive on-the-fly:
-        - Read PRODUCT.md (voice, register, anti-references)
-        - Read the surface's design_ref (DESIGN.md or DESIGN-{surface}.md)
-        - Construct a minimal brief in memory: tokens + voice_overlay + register bans
-          + impeccable absolute bans (from ${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/SKILL.md)
-        - Note: source = "derived"
-   ```
-
-   Track each surface's brief source and hashes. Findings report MUST include:
-
-   ```
-   Surface: {surface}
-   Brief source: canonical | canonical+override | phase-override | derived
-   product_hash: <sha>
-   design_hash: <sha of resolved design_ref>
-   ```
-
-   When source = `derived`, add this line to the findings section:
-
-   > Context was derived on the fly — no persistent brief exists for surface `{surface}`. Consider running `/rivet plan {phase}` to capture a canonical brief for future consistency.
-
-3. **Audit + critique via impeccable references.** For each surface group, dispatch two subagents in parallel with scope = those files + the resolved brief from step 2 + PRODUCT.md + the surface's DESIGN file:
-
-   - Audit subagent — reads `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/audit.md`. Technical checks (a11y, perf, theming, responsive, anti-patterns). Returns P0–P3 findings.
-   - Critique subagent — reads `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/critique.md`. UX heuristic + persona scoring. Returns P0–P3 findings.
-
-4. **Merge.** Fold all findings into this review's findings list under a `Design System Compliance` subheading, preserving the same P0–P3 severity format used by points 1–16. Do not duplicate findings already raised by points 1–16 — if point 4 already flagged a validation gap the audit would also catch, keep only the point-4 entry.
-
-If the trigger doesn't fire (no frontend files in scope, or PRODUCT.md / DESIGN.md missing), note it in the "Passed Clean" section as `17. Design System Compliance — N/A ({reason})`. Do not hard-fail the review when design files are missing; treat it as non-applicable.
+When the trigger fires, read `${CLAUDE_SKILL_DIR}/design.md` (if not already loaded this session) and apply its `## Review — Design System Compliance (Point 17)` section, which contains the mechanical token lint, the per-surface brief resolution chain (canonical / canonical+override / phase-override / derived), the parallel audit + critique subagent dispatch, and the merge rule that avoids duplicating findings already raised by points 1–16.
 
 ---
 

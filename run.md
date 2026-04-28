@@ -404,79 +404,19 @@ Continue? (y / pause / review)
 
 If ending your session after this checkpoint, run `/rivet learnings` first.
 
-### Sub-Plan Design Verification (requires impeccable)
+### Sub-Plan Design Verification (conditional, requires impeccable)
 
-After all tasks complete and the full test suite passes, run a design verification pass — but BEFORE offering the Sub-Plan Transitions menu. Skip this entire block if any of:
+After all tasks complete and the full test suite passes — but BEFORE offering the Sub-Plan Transitions menu — apply the design verification pass.
 
+Skip this entire block if any of:
 - `/rivet run` was invoked with `--skip-verify`, OR
 - the sub-plan contained zero `ui: true` tasks, OR
 - `PRODUCT.md` or `DESIGN.md` is missing at the project root, OR
-- the [impeccable](https://github.com/pbakaus/impeccable) skill is not installed at `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/` (in which case emit a one-line note: `Design verification skipped: impeccable not found. Install at ~/.agents/skills/impeccable/ or set $IMPECCABLE_DIR.`).
+- the [impeccable](https://github.com/pbakaus/impeccable) skill is not installed at `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/`.
 
-When running, print the banner once per session:
+On skip, emit a one-line note (e.g. `Design verification skipped: <reason>.`) and proceed to Sub-Plan Transitions.
 
-> `Running design verification… use '--skip-verify' on /rivet run to opt out next time.`
-
-**1. Group UI tasks by `surface`.** Each surface gets its own verification pass so admin findings don't pollute marketing findings.
-
-**2. For each surface group, in parallel:**
-
-Read the impeccable references fresh:
-- `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/SKILL.md` (shared laws)
-- Register ref — `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/brand.md` OR `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/product.md` (based on the surface's resolved `register`)
-- `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/audit.md`
-- `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/critique.md`
-- `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/harden.md`
-
-Dispatch three subagents in parallel (see "Parallel Dispatch" section above for the tool-call pattern). Each subagent's prompt includes:
-- Scope: the changed files belonging to this surface in the sub-plan
-- The surface's composed brief via `load_brief(surface)`: read `docs/design/brief-{surface}.md` (canonical, project-wide) + optional `docs/plans/{spec}/{phase}/design-brief-{surface}.md` (per-phase override) composed together — override sections append, override tokens overlay. See plan.md Step 6.2 for the protocol. For ad-hoc runs, the override path is `docs/plans/adhoc/{name}/design-brief-{surface}.md`.
-- Each task's Design Spec verbatim
-- The single impeccable reference it should follow:
-   - Audit subagent → `audit.md`. Produces P0–P3 technical findings (a11y, perf, theming, responsive, anti-patterns).
-   - Critique subagent → `critique.md`. Produces UX heuristic scoring + persona-based checks.
-   - Harden subagent → `harden.md`. Produces edge-case findings (i18n, overflow, long text, big data, errors).
-
-**3. Merge findings across all surfaces.** Group by severity P0 / P1 / P2 / P3. Count by category.
-
-**4. Polish gate.** If the merged result has zero P0 and zero P1 across the whole sub-plan, dispatch one polish subagent per surface reading `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/polish.md` against the same scope. If any P0/P1 exists, skip polish — running polish while real issues are outstanding buries the micro-findings.
-
-**5. Optimize gate.** If any task in the sub-plan touched list rendering, tables, charts, animation loops, or heavy imports (check task file paths and `optimize`-trigger keywords in task descriptions), dispatch an optimize subagent reading `${IMPECCABLE_DIR:-~/.agents/skills/impeccable}/reference/optimize.md`.
-
-**6. Report to the user:**
-
-```
-Sub-plan verification — {sub-plan-name}
-  Audit:    {a0} P0, {a1} P1, {a2} P2, {a3} P3  ({per-surface breakdown if multi-surface})
-  Critique: score {s}/20 — "{top-line summary}"
-  Harden:   {h0} P0, {h1} P1, ...
-  Polish:   {status — "ran" or "skipped (P0/P1 present)"}
-  Optimize: {status — "ran" or "not triggered"}
-
-Next actions:
-  1. Accept all P0/P1 → appended as new tasks to this sub-plan (status: pending, origin: audit)
-  2. Review findings individually
-  3. Skip (continue to next sub-plan without addressing — P0/P1 items will resurface in /rivet review)
-```
-
-**7. On "Accept":** For each P0 and P1 finding, append a new task entry to the current sub-plan's YAML frontmatter:
-
-```yaml
-  - id: {max(id) + 1}
-    title: "{finding summary}"
-    status: pending
-    origin: audit                     # flag so /rivet plan regenerate preserves it
-    depends_on: [{id of task that produced the flagged file}]
-    files: [{flagged file paths}]
-    ui: true
-    surface: {surface from parent}
-    register: {register from parent}
-    ui_commands: [{refiner for the finding category — e.g., 'harden' for harden findings, 'layout' for hierarchy findings}]
-```
-
-Also append a `### Task N` section to the body with the finding details and suggested fix. Tasks with `origin: audit` are executed the same way as regular tasks — the normal Stage 2 chain applies.
-
-P2 / P3 findings are presented as suggestions only — not auto-appended. User can choose to add specific ones.
+Otherwise read `${CLAUDE_SKILL_DIR}/design.md` (if not already loaded this session) and apply its `## Run — Sub-Plan Design Verification` section, which contains the per-surface grouping, parallel audit/critique/harden subagent dispatch, the polish + optimize gates, the user-facing report format, and the "Accept P0/P1 → append as origin: audit tasks" frontmatter handling.
 
 ### Sub-Plan Transitions
 

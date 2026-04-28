@@ -326,23 +326,9 @@ Input: [paste the bet, registers, kill criteria, bet sizing]
 
 Output appended to the spec as `## Opposition Register` with the objections numbered (`Op1`, `Op2`, …). Each `Op` entry that the user accepts as valid migrates an item into the registers (typically `R` or `O`).
 
-### 2.9 Co-founder alignment (optional)
+### 2.9 Co-founder alignment (optional, conditional)
 
-Skip if `PRODUCT.md` is missing or has a single author.
-
-If `PRODUCT.md` lists multiple authors OR the user has mentioned a co-founder in the conversation:
-
-```
-You mentioned Sara as co-founder. Before locking in this bet:
-  1. Has Sara reviewed the bet statement?
-  2. Any disagreements on target customer, pricing, or moat?
-  3. Anything you've deferred discussing because it felt awkward?
-
-If any of these have unresolved items, list them — they go into the
-Decisions Deferred register so they don't get lost.
-```
-
-Use AskUserQuestion. Don't push if the user says "skip" — note as `O1: Co-founder alignment pending review` and move on.
+Skip if `PRODUCT.md` is missing. Otherwise read `${CLAUDE_SKILL_DIR}/design.md` (if not already loaded this session) and apply its `## Spec — Co-founder alignment` section.
 
 ### 2.10 End of Phase 1: recommendation
 
