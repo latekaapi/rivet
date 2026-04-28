@@ -17,9 +17,20 @@ Before loading context or executing anything, verify the environment is ready. S
    ```
    If any lockfile changed, prompt to run the corresponding install command (from CLAUDE.md) before continuing.
 
-4. **Branch check.** If currently on `main` or `master`:
-   - Offer to create and switch to `rivet/{spec}/{phase-id}` (or `rivet/adhoc/{name}` for ad-hoc plans).
-   - Convention documented in [docs/overview.md](docs/overview.md) (also covered in [README.md](README.md) section 5). User can decline and stay on main.
+4. **Branch check.** Compare the current branch against the run target:
+
+   - **On `main` / `master`:** Offer to create and switch to the run's target branch (`rivet/{spec}/{phase-id}` for spec phases, `rivet/adhoc/{name}` for ad-hoc, `rivet/{spec}/{phase}/reviews/{slug}` for review fix-plans). User can decline and stay on main.
+
+   - **Already on the run's target branch:** Proceed — this is normal session resumption.
+
+   - **On a different `rivet/...` branch** (e.g., on `rivet/main/phase-0` and running `phase-1`): The previous phase's branch is still checked out — this run's commits would land on the wrong branch. Check whether the current branch is already merged into main (`git branch --merged main`) and offer:
+     - (a) **Switch to main, then create the new branch.** Default if the current branch is already merged.
+     - (b) **Merge current branch to main first, then create the new branch.** Default if it's unmerged. Walks through the same regular-vs-squash prompts as Phase Completion.
+     - (c) **Continue on the current branch.** Anti-pattern — mixes work from two phases on one branch. Only pick this if you explicitly want to stack.
+
+   - **On any other branch** (not `main`/`master`, not a `rivet/...` branch): Warn that the skill didn't create this branch. Offer to switch to main and create the `rivet/...` target branch, or proceed on the current branch (user's call).
+
+   Convention documented in [docs/overview.md](docs/overview.md) (also covered in [README.md](README.md) section 5).
 
 5. **Design context drift.** If the plan's frontmatter has `design_hashes` (impeccable integration present), recompute each surface's hashes and compare against stored values:
 
@@ -543,7 +554,6 @@ On A:
 ```bash
 git checkout main
 git merge {current-branch}
-git checkout {current-branch}
 ```
 
 On B:
@@ -551,10 +561,9 @@ On B:
 git checkout main
 git merge --squash {current-branch}
 git commit  # default message: "feat({phase}): {spec}/{phase}"
-git checkout {current-branch}
 ```
 
-After merge: `Merged {current-branch} → main ✓. Returned to {current-branch}. Next: git push origin main if you want to push to remote.`
+After merge: `Merged {current-branch} → main ✓. Now on main. Next: git push origin main to push, or start the next phase with /rivet run.`
 
 **Option 3 — Push branch only:**
 ```bash
@@ -595,7 +604,6 @@ Options:
 ```bash
 git checkout main
 git merge {current-branch}
-git checkout {current-branch}
 ```
 
 **Option 2 — Squash merge:**
@@ -603,7 +611,6 @@ git checkout {current-branch}
 git checkout main
 git merge --squash {current-branch}
 git commit  # default message: "fix({phase}): review/{slug}"
-git checkout {current-branch}
 ```
 
 **Option 3 — Push only:**
@@ -613,7 +620,7 @@ git push origin {current-branch}
 
 **Option 4:** No git ops.
 
-After any merge: `Merged {current-branch} → main ✓. Returned to {current-branch}. Next: git push origin main if you want to push to remote.`
+After any merge: `Merged {current-branch} → main ✓. Now on main. Next: git push origin main to push, or start the next phase with /rivet run.`
 
 If ending your session here, run `/rivet learnings` first.
 
@@ -741,7 +748,6 @@ Options:
 ```bash
 git checkout main
 git merge rivet/adhoc/{name}
-git checkout rivet/adhoc/{name}
 ```
 
 **Option 2:**
@@ -749,13 +755,12 @@ git checkout rivet/adhoc/{name}
 git checkout main
 git merge --squash rivet/adhoc/{name}
 git commit  # default message: "feat(adhoc): {name}"
-git checkout rivet/adhoc/{name}
 ```
 
 **Option 3:** `git push origin rivet/adhoc/{name}`
 
 **Option 4:** No git ops.
 
-After any merge: `Merged rivet/adhoc/{name} → main ✓. Returned to rivet/adhoc/{name}. Next: git push origin main if you want to push to remote.`
+After any merge: `Merged rivet/adhoc/{name} → main ✓. Now on main. Next: git push origin main to push.`
 
 If ending your session here, run `/rivet learnings` first.

@@ -87,7 +87,9 @@ Rivet is a solo workflow — no PR or remote approval step is required. Merging 
 - **Regular merge** — preserves all task commits on main. Full history visible.
 - **Squash merge** — collapses the entire phase into one commit on main, branch history stays on the rivet branch. Cleaner main log.
 
-The merge is always an offer, never automatic. You can always choose "push branch only" or "do nothing" and merge manually. After any merge, Rivet returns you to the feature branch so checkpoint tags and rollback remain intact.
+The merge is always an offer, never automatic. You can always choose "push branch only" or "do nothing" and merge manually. After a successful merge, Rivet leaves you on `main` — that's the natural starting point for the next phase, and the pre-flight branch check on the next `/rivet run` will offer to create the next phase's branch.
+
+Starting a new run from a leftover `rivet/...` branch (e.g., trying to start `phase-1` while still on `rivet/main/phase-0`) is caught by the pre-flight branch check, which offers to switch to main first — merging the leftover branch on the way if it isn't merged yet. So whichever way you arrive, the next run starts on a clean branch for the right phase.
 
 ## Usage
 
