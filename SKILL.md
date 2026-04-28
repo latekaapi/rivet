@@ -15,7 +15,7 @@ Parse the first word of `$ARGUMENTS` to determine the subcommand. Then read the 
 | First word | Action |
 |---|---|
 | `spec` | Read `${CLAUDE_SKILL_DIR}/spec.md`, then execute. Args = `<braindump>` OR `--from <file>` OR `{name}` (existing spec, continue from current `Status:`) OR `{name} --refresh` (additive re-validation) OR none (synthesize from conversation context). Optional flags: `--lite` / `--deep`, `--force` (bypass quality gates), `--name <n>`. |
-| `plan` | Read `${CLAUDE_SKILL_DIR}/plan.md`, then execute. Args = `{spec} {phase}` OR `--from-review reviews/<path>.md` (or any path under `reviews/` ending in `.md`) to generate a plan from a saved review file OR free-text ad-hoc task description OR `{spec} {phase} --refresh` to re-validate an existing plan OR `{spec} {phase} regenerate sub-plan N` to rewrite one sub-plan. |
+| `plan` | Read `${CLAUDE_SKILL_DIR}/plan.md`, then execute. Args = `{spec} {phase}` OR `--from-review reviews/<path>.md` (or any path under `reviews/` ending in `.md`) to generate a plan from a saved review file OR free-text ad-hoc task description OR `{spec} {phase} --refresh` to re-validate an existing plan OR `{spec} {phase} regenerate sub-plan N` to rewrite one sub-plan. Positional-agnostic flag: `--no-review` skips the Step 5.5 senior plan-review pass on any mode. |
 | `run` | Read `${CLAUDE_SKILL_DIR}/run.md`, then execute. Args = `{spec} {phase}` or `adhoc/{name}` + optional natural language (e.g., `task 3`, `expand task 4`, `revise task 5 "reason"`, `rollback`, `start from task 5`, or `review {slug}` to run a review-driven fix-plan nested under the phase). |
 | `rollback` | Read `${CLAUDE_SKILL_DIR}/run.md`'s Rollback section. Args = `{spec} {phase}` + optional target tag. Shortcut for `run {spec} {phase} rollback`. |
 | `review` | Read `${CLAUDE_SKILL_DIR}/review.md`, then execute. Optional args = scope (file paths, branch name, `pr <number>` / `pr-<number>` / `#<number>` / `--pr <number>`, or `--full`). |
@@ -51,6 +51,7 @@ Single-spec shorthand (when only one spec exists, in docs/specs/ OR a bare spec.
 
   /rivet plan main phase-0 --refresh                → re-validate existing plan vs current codebase
   /rivet plan main phase-0 regenerate sub-plan 2    → rewrite one sub-plan only
+  /rivet plan main phase-0 --no-review              → skip the senior plan-review pass (faster, lower safety)
   /rivet run main phase-0                           → resume from next incomplete task
   /rivet run main phase-0 task 3                    → jump to a specific task
   /rivet run admin phase-0 start from task 5        → same, natural language
@@ -96,6 +97,7 @@ Both plan and run understand natural language — say what you mean.
 - **Spec location:** `docs/specs/{spec}.md` (one file per spec — e.g. `main.md`, `admin.md`, `agency.md`; source of truth, never modified by this skill). **Single-spec fallback:** if `docs/specs/` is missing or empty, the skill also accepts a bare `spec.md` at the project root with implicit name `spec` (plans then live at `docs/plans/spec/{phase}/...`, branch `rivet/spec/{phase}`). See "spec discovery" below.
 - **Spec discovery (used by every subcommand):** (1) list `docs/specs/*.md`; (2) if that's empty, look for `spec.md` at project root and treat it as a single spec named `spec`; (3) if both are empty, only ad-hoc mode works. When exactly one spec is discovered (either source), the user may omit the spec name from any subcommand — `/rivet plan phase-0`, `/rivet run phase-0 task 3`, `/rivet status` all infer it. With multiple specs, the name is required and an unrecognized first arg triggers a "which spec did you mean?" prompt.
 - **Plan / review output, branch naming, checkpoint tags:** documented inside the relevant subcommand file (plan.md, run.md, review.md). Each subcommand owns its own paths.
+- **Senior plan review:** `/rivet plan` runs a second Opus pass (Step 5.5 in [plan.md](plan.md)) that reviews the generated plan for executor-friendliness, dependency correctness, and spec alignment, auto-revises blocker/major findings, then re-reviews. Hard cap: 2 passes. Hard-gates only on residual blockers; major/minor findings warn and continue. Skip via `--no-review`. Report saved alongside the plan at `docs/plans/{spec}/{phase}/plan-review.md` (or `docs/plans/adhoc/{name}/plan-review.md`).
 - **Progress:** tracked in YAML frontmatter inside each plan file (per-task `status:` field). See [plan.md](plan.md) for the schema.
 - **Learnings scratch:** `docs/plans/{spec}/{phase}/learnings-scratch.md` (or `docs/plans/adhoc/{name}/learnings-scratch.md`) is written during `/rivet run` and consumed by `/rivet learnings`.
 - **Verification protocol:** subagents follow [verify.md](verify.md); the coordinator re-runs each task's test command (Stage 0) before trusting a subagent's report.
