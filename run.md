@@ -229,7 +229,7 @@ Apply review points 4 (Correctness & Edge Cases), 6 (Duplication, Dead Code & St
 
 Three mechanical checks in order. Any failure blocks task close — dispatch a revise subagent with the exact failure report as the prompt. Repeat until clean.
 
-1. **`design_extends` application (if present).** If the task's frontmatter declares `design_extends:`, merge those token additions into the task's surface `design_ref` file (DESIGN.md or DESIGN-{surface}.md), then invalidate the plan's `design_hashes[{surface}].sha` to the new SHA. Record the append in the Session Log. Do this before Design Token Lint so the new tokens register as allowed.
+1. **`design_extends` application (if present).** If the task's frontmatter declares `design_extends:`, merge those token additions into the task's surface `design_ref` file (DESIGN.md or DESIGN-{surface}.md), then invalidate the plan's `design_hashes[{surface}].sha` to the new SHA. Record the append in `session-log.md`. Do this before Design Token Lint so the new tokens register as allowed.
 
 2. **Design Token Lint.** Compute the task's changed files via `git diff --name-only <task-start-ref> HEAD`, then run:
 
@@ -314,7 +314,7 @@ Skip this entire Stage 2a block for tasks where `ui: false`.
 
 **If review passes:**
 1. Update the task's `status:` to `done` in the plan file's YAML frontmatter
-2. Add a one-line entry to the Session Log at the bottom of the plan file
+2. Add a one-line entry to `docs/plans/{spec}/{phase}/session-log.md` (create with `# Session Log\n` header if absent)
 3. Proceed to next task
 
 Before dispatching each subagent, also update that task's `status:` from `pending` to `in_progress` so concurrent or resumed sessions see the current state.

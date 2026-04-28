@@ -176,9 +176,20 @@ load_brief(surface):
   return canonical
 ```
 
-### 6.3 Append per-task Design Spec
+### 6.3 Insert per-task Design Spec
 
-For each `ui: true` task, append these sections to the task body (do NOT overwrite the task description, tests, or existing frontmatter):
+For each `ui: true` task, insert the `### Design Spec` block immediately after the `**Files:**` line and before `**Step 1**` (do NOT overwrite the task description, tests, or existing frontmatter). The `### Design Verification` checklist goes at the end of the task body, after the Commit line.
+
+Resulting task order for UI tasks:
+1. `### Task N: Title`
+2. `**Files:** ...`
+3. `### Design Spec` ← inserted here so reviewers see design intent before reading test/impl code
+4. `**Step 1: Write the failing test**` + `**Tests that:**` one-liner
+5. `**Step 2 (verify fail):**` (compact)
+6. `**Step 3: Write minimal implementation**`
+7. `**Step 4 (verify pass):**` (compact)
+8. `**Commit:**` (compact)
+9. `### Design Verification` ← checklist at end for post-implementation review
 
 ```markdown
 ### Design Spec
@@ -210,12 +221,9 @@ new_primitive:
 
 ### Design Verification
 
-Mechanical (run by /rivet, hard-fail at Stage 2 — see run.md):
-- Design Token Lint clean (no hex / off-scale values / unknown fonts in changed files)
-- Reuse/new_primitive declarations match actual files created
-- Component Catalog duplicate-similarity check clean
+**Mechanical:** `/rivet verify` — token lint + reuse/catalog checks (hard-fail, see run.md Stage 2).
 
-Checklist (reviewer judgement, evaluated in /rivet review):
+**Checklist** (reviewer judgement, evaluated in /rivet review):
 - [ ] All states above are implemented and visually distinct
 - [ ] Responsive behavior matches spec at declared breakpoints
 - [ ] No absolute-ban violations (shared + register + surface)

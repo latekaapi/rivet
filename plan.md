@@ -466,6 +466,17 @@ tasks:
 
 ---
 
+## Plan Overview
+
+**Delivers:** [One sentence — what the user/system can do when this sub-plan is done, beyond "tests pass". Frame as a user capability, not a list of classes.]
+**Key decisions:**
+- [Non-obvious architectural choice #1 — state the WHY, not the what. E.g., "model slugs use dots not dashes (anthropic/claude-sonnet-4.6) — verified against live /api/v1/models 2026-04-27"]
+- [Non-obvious architectural choice #2]
+**Dependency chain:** [E.g., "1 → 2 → 3 → 4 → 8 → 9 → 10; tasks 6 and 7 are independent and can run in parallel"]
+**Exit condition:** `[exact command]` — [expected output, e.g., "56 passed, 0 failed"]
+
+---
+
 ## File Map
 
 List every file that will be created or modified, with its responsibility:
@@ -485,6 +496,8 @@ List every file that will be created or modified, with its responsibility:
 **Files:** `path/to/file.php`, `path/to/test.php`
 
 **Step 1: Write the failing test**
+
+**Tests that:** [One sentence — what property or behavior the test asserts, not how. E.g., "SiteFetcher.fetch() returns a map with `title` and `meta_description` keys, both non-empty."]
 
 ​```php
 // tests/Unit/SiteFetcherTest.php
@@ -508,10 +521,7 @@ class SiteFetcherTest extends TestCase
 }
 ​```
 
-**Step 2: Run test — verify it fails**
-
-Run: `php artisan test --filter=SiteFetcherTest`
-Expected: FAIL — class `App\Services\SiteFetcher` not found
+**Step 2 (verify fail):** `php artisan test --filter=SiteFetcherTest` → FAIL — class `App\Services\SiteFetcher` not found.
 
 **Step 3: Write minimal implementation**
 
@@ -529,17 +539,9 @@ class SiteFetcher
 }
 ​```
 
-**Step 4: Run test — verify it passes**
+**Step 4 (verify pass):** `php artisan test --filter=SiteFetcherTest` → PASS.
 
-Run: `php artisan test --filter=SiteFetcherTest`
-Expected: PASS
-
-**Step 5: Commit (one commit per task — test + impl together)**
-
-​```bash
-git add app/Services/SiteFetcher.php tests/Unit/SiteFetcherTest.php
-git commit -m "feat: add SiteFetcher with homepage extraction (task N)"
-​```
+**Commit:** `feat: add SiteFetcher with homepage extraction (task N)` — files: `app/Services/SiteFetcher.php`, `tests/Unit/SiteFetcherTest.php`
 
 Include the task id in the commit subject so rollback can match commits to tasks when resetting. One task = one commit. Do not stage test and implementation into separate commits — the red-green-refactor happens within a single commit. Sub-plan-level squashing is offered at sub-plan completion ([run.md](run.md)).
 
@@ -548,6 +550,8 @@ Include the task id in the commit subject so rollback can match commits to tasks
 The Laravel example above is not prescriptive — plans adopt whatever stack and test runner the target project uses. Same task, TypeScript shape:
 
 **Step 1: Write the failing test**
+
+**Tests that:** SiteFetcher.fetch() returns an object with `title` and `metaDescription` properties, both truthy.
 
 ​```ts
 // src/services/__tests__/site-fetcher.test.ts
@@ -564,10 +568,10 @@ describe('SiteFetcher', () => {
 });
 ​```
 
-**Step 2: Run test — verify it fails:** `npx vitest run site-fetcher` → FAIL (module not found).
+**Step 2 (verify fail):** `npx vitest run site-fetcher` → FAIL — module not found.
 **Step 3: Write minimal implementation** at `src/services/site-fetcher.ts`.
-**Step 4: Run test — verify it passes:** `npx vitest run site-fetcher` → PASS.
-**Step 5: Commit** — `git add src/services/site-fetcher.ts src/services/__tests__/site-fetcher.test.ts && git commit -m "feat: add SiteFetcher with homepage extraction (task N)"`.
+**Step 4 (verify pass):** `npx vitest run site-fetcher` → PASS.
+**Commit:** `feat: add SiteFetcher with homepage extraction (task N)` — files: `src/services/site-fetcher.ts`, `src/services/__tests__/site-fetcher.test.ts`
 
 Pick the test runner the project already uses (`pytest`, `go test`, `cargo test`, `bundle exec rspec`, `php artisan test`, etc.). The TDD shape — failing test, verify fail, minimal impl, verify pass, single commit — is invariant; only the commands change.
 
@@ -578,9 +582,7 @@ Pick the test runner the project already uses (`pytest`, `go test`, `cargo test`
 
 ---
 
-## Session Log
-
-(Updated during execution — leave empty at generation time)
+> Session notes are kept in [session-log.md](../session-log.md) — appended by `/rivet run`, not here. Leave this line as-is at generation time.
 ```
 
 ### Task Granularity Rules
@@ -597,8 +599,8 @@ Each task MUST be a single testable unit of work, completable in 2–5 minutes:
 
 1. **Exact file paths** — no "create a service class," instead the specific file path the task targets (e.g., `src/services/site-fetcher.ts` or `app/Services/SiteFetcher.php`).
 2. **Complete code** — not "add validation logic," instead the actual code to write. The executor should never have to make a design decision.
-3. **Exact test commands** with expected output — not "run the tests," instead the project's actual test invocation with a filter (`npx vitest run site-fetcher`, `pytest -k site_fetcher`, `php artisan test --filter=SiteFetcherTest`, etc.) and the expected PASS/FAIL state.
-4. **Exact git commands** — not "commit your changes," instead the full `git add` + `git commit -m "..."` with a conventional commit message
+3. **A `**Tests that:**` one-liner** immediately before each Step 1 code block — one sentence stating what property or behavior the test asserts. Written for human reviewers; the code block is authoritative for the executor.
+4. **Compact Steps 2, 4, and 5** — use the one-liner form: `**Step 2 (verify fail):** <command> → FAIL — <reason>.` / `**Step 4 (verify pass):** <command> → PASS.` / `**Commit:** <conventional-message> — files: <file list>`. Not multi-line blocks.
 5. **Context from the spec** — if the spec specifies a particular approach, data structure, API response format, or design decision, include it directly in the task so the executor doesn't need to read the spec
 
 ### What Tasks MUST NOT Include
