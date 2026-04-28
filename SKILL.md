@@ -21,6 +21,7 @@ Parse the first word of `$ARGUMENTS` to determine the subcommand. Then read the 
 | `review` | Read `${CLAUDE_SKILL_DIR}/review.md`, then execute. Optional args = scope (file paths, branch name, `pr <number>` / `pr-<number>` / `#<number>` / `--pr <number>`, or `--full`). |
 | `status` | Read `${CLAUDE_SKILL_DIR}/status.md`, then execute. Optional args = spec name (e.g. `main`) to scope output to one spec. |
 | `learnings` | Read `${CLAUDE_SKILL_DIR}/learnings.md`, then execute. No args expected. |
+| `redesign` | Read `${CLAUDE_SKILL_DIR}/redesign.md`, then execute. Args = optional `{spec} {phase}` + `--surface {name}`, `--tasks {n,m,p}`, `--dry-run`. Scans all plans if no spec/phase given. Single-spec shorthand applies. |
 | (empty) | Show usage help below. |
 | (unrecognized) | Show usage help below. |
 
@@ -83,6 +84,9 @@ Other:
   /rivet status main                       → drill into just one spec
   /rivet review                            → deep code review on changed files
   /rivet learnings                         → capture what was learned this session
+  /rivet redesign                          → re-apply updated DESIGN.md to already-built components
+  /rivet redesign main phase-0             → scope to one phase
+  /rivet redesign --dry-run                → preview stale surfaces without touching files
 
 Both plan and run understand natural language — say what you mean.
 ```
@@ -97,4 +101,4 @@ Both plan and run understand natural language — say what you mean.
 - **Verification protocol:** subagents follow [verify.md](verify.md); the coordinator re-runs each task's test command (Stage 0) before trusting a subagent's report.
 - **Project context:** always read `CLAUDE.md` if it exists before any subcommand
 - **Domain language:** use the same vocabulary as the spec — if the spec says "enrichment," the plan says "enrichment," the code says "enrichment"
-- **Design integration (optional, requires impeccable):** when the [impeccable](https://github.com/pbakaus/impeccable) skill + `PRODUCT.md` + `DESIGN.md` are present, plan/run/review subcommands enrich UI work with per-surface briefs, per-task Design Specs, mechanical token-lint + reuse checks, and end-of-sub-plan audit/critique/harden passes. Full mechanics live in `${CLAUDE_SKILL_DIR}/design.md`, loaded conditionally by plan.md / run.md / review.md when those subcommands run. Missing impeccable or PRODUCT.md or DESIGN.md → enrichment + verification skip with a one-line note; pipeline never blocks. `--skip-verify` on `/rivet run` opts out of the verification pass even when impeccable is present.
+- **Design integration (optional, requires impeccable):** when the [impeccable](https://github.com/pbakaus/impeccable) skill + `PRODUCT.md` + `DESIGN.md` are present, plan/run/review subcommands enrich UI work with per-surface briefs, per-task Design Specs, mechanical token-lint + reuse checks, and end-of-sub-plan audit/critique/harden passes. Full mechanics live in `${CLAUDE_SKILL_DIR}/design.md`, loaded conditionally by plan.md / run.md / review.md when those subcommands run. Missing impeccable or PRODUCT.md or DESIGN.md → enrichment + verification skip with a one-line note; pipeline never blocks. `--skip-verify` on `/rivet run` opts out of the verification pass even when impeccable is present. When DESIGN.md changes after components are built, `/rivet redesign` re-applies the visual layer to done tasks and updates `design_hashes` without re-running the TDD cycle.

@@ -28,6 +28,7 @@ If you want the elevator pitch instead, see [docs/overview.md](docs/overview.md)
   - [4.5 `/rivet status`](#45-rivet-status)
   - [4.6 `/rivet learnings`](#46-rivet-learnings)
   - [4.7 `/rivet spec`](#47-rivet-spec)
+  - [4.8 `/rivet redesign`](#48-rivet-redesign)
 - [5. File layout & conventions](#5-file-layout--conventions)
 - [6. Spec discovery rules](#6-spec-discovery-rules)
 - [7. Optional: impeccable design integration](#7-optional-impeccable-design-integration)
@@ -193,6 +194,9 @@ Auto-detects attached files in Claude Code / VS Code (drag a file in — no `--f
 /rivet status main                       → drill into just one spec
 /rivet review                            → senior code review (16 points + design audit on frontend files)
 /rivet learnings                         → end-of-session CLAUDE.md sweep
+/rivet redesign                          → re-apply updated DESIGN.md to already-built components
+/rivet redesign main phase-0             → scope to one phase
+/rivet redesign --dry-run                → preview which components would be touched
 ```
 
 ---
@@ -210,6 +214,7 @@ The router is `/rivet [subcommand] [args]`. Calling `/rivet` alone (or with an u
 | `review` | Sonnet family | Senior code review (16 points + design audit if applicable) |
 | `status` | Sonnet family | Progress dashboard across all specs + ad-hoc |
 | `learnings` | Sonnet family | End-of-session CLAUDE.md / README.md sweep |
+| `redesign` | Sonnet family | Re-apply an updated DESIGN.md to already-built components (visual pass only) |
 
 ### 4.1 `/rivet plan`
 
@@ -544,6 +549,44 @@ Rejected: session summaries, restating obvious code, generic best practices, one
 
 `/rivet plan` reads the spec's `## Phase N` headings, picks the requested one, and generates sub-plans against it. Capability IDs and decision-log entries carry through.
 
+### 4.8 `/rivet redesign`
+
+**Purpose.** When DESIGN.md is updated — via `$impeccable document`, `$impeccable teach`, Google Stitch, or a manual token edit — already-built components go stale. `/rivet redesign` closes the loop: it scans plan files for surfaces whose stored `design_hashes[surface].ref_sha` no longer matches the current DESIGN.md, then dispatches targeted subagents to re-apply `ui_commands` (typeset, colorize, layout, animate, etc.) to the affected component files. It is a **visual pass only** — no TDD cycle, no logic or prop changes, no test modifications.
+
+**Argument shapes:**
+
+| Form | Example | What it does |
+|---|---|---|
+| (no args) | `/rivet redesign` | Scan all plans across all specs/phases for DESIGN.md drift |
+| `{spec} {phase}` | `/rivet redesign main phase-0` | Scope to one phase only |
+| `{phase}` (single-spec) | `/rivet redesign phase-0` | Single-spec shorthand |
+| `--surface {name}` | `/rivet redesign main phase-0 --surface marketing` | Re-apply one surface only |
+| `--tasks {n,m,p}` | `/rivet redesign main phase-0 --tasks 3,7` | Re-apply specific task IDs only |
+| `--dry-run` (any position) | `/rivet redesign --dry-run` | Show what would be re-applied without touching any files |
+
+**When to use it:** Any time you run `$impeccable document` or `$impeccable teach` to update DESIGN.md, or edit a color/spacing/typography token directly. After finishing, `/rivet run` pre-flight will no longer warn about design drift for the updated surfaces.
+
+**What it does, step by step:**
+
+1. **Gate check.** Verify DESIGN.md exists and impeccable is installed. Require a clean working tree (redesign commits must be isolated).
+2. **Scan.** Walk sub-plan files in scope. For each surface in `design_hashes`, compare `sha256(DESIGN.md)` to the stored `ref_sha`. Collect every `ui: true` task on stale surfaces.
+3. **Report.** Show a summary table (surface → sub-plans → task count → file count → SHA diff). Exit here on `--dry-run`.
+4. **Refresh briefs.** For each stale surface, regenerate `docs/design/brief-{surface}.md` from the updated DESIGN.md + PRODUCT.md + impeccable references (once per surface, not per task). Warns before overwriting hand-edited briefs.
+5. **Dispatch subagents.** For each affected UI task, dispatches a subagent with the existing component files, the updated design brief, and the task's original `ui_commands`. Same parallel rules as `/rivet run` (up to 3 concurrent, no file-path overlap). Subagents stage but do not commit.
+6. **Lint.** Runs `design-lint.mjs` after each subagent. On violations, dispatches a fix subagent (cap 2 retries). Persistent failures are marked `redesign_failed` — stale hashes remain for those tasks.
+7. **Commit.** Coordinator commits per task: `design: apply {surface} redesign to {task.title} ({sub-plan} task {id})`.
+8. **Update hashes.** Writes new `ref_sha` and `canonical_sha` into plan frontmatter for every fully-passing sub-plan. Commits all frontmatter updates per phase: `design: update design_hashes after {surface} redesign — {spec}/{phase}`.
+
+**What it does NOT do** (intentional):
+- No TDD cycle — tests are not re-run, test files are never modified.
+- No Component Catalog duplicate check — re-applying to existing components, not creating new ones.
+- No Sub-Plan Design Verification (audit/critique/harden) — that pass is for newly-built components.
+- No checkpoint tags.
+
+**If some tasks fail** (`redesign_failed`), their hashes stay stale. Fix the components manually, then re-run `/rivet redesign` — it will pick up only the still-stale tasks.
+
+**Recommended model:** Sonnet family. This is an execution pass (like `/rivet run`), not a planning pass.
+
 ---
 
 ## 5. File layout & conventions
@@ -720,6 +763,7 @@ rounded:
 | `/rivet run` Stage 2a | Mechanical chain per UI task: design_extends apply → token lint → reuse declaration match → catalog duplicate check |
 | `/rivet run` Sub-plan verification | Parallel audit + critique + harden subagents per surface; polish gated on zero P0/P1; optimize gated on heavy-import / list / chart / animation triggers |
 | `/rivet review` Point 17 | Mechanical lint + audit + critique on changed frontend files |
+| `/rivet redesign` | Re-applies the visual layer to already-built components after DESIGN.md changes; updates `design_hashes` in plan frontmatter on completion |
 
 ### 7.5 Brief resolution chain (for review and verification)
 
@@ -1088,6 +1132,32 @@ Review report has P0–P3 severity + verdict + per-finding fix recommendation. P
 3. Fix specific items
 4. No changes
 
+### 13.15 Updating the design system after components are built
+
+You've shipped Phase 0 components, then ran `$impeccable document` (or edited a color token in DESIGN.md directly). Now `/rivet run` pre-flight warns about design drift. Here's how to re-apply:
+
+```bash
+# Preview what would change (no files touched)
+/rivet redesign --dry-run
+
+# Re-apply the design layer to all affected components across all specs
+/rivet redesign
+
+# Or scope to just one phase if you know only phase-0 is affected
+/rivet redesign main phase-0
+
+# Or only the marketing surface
+/rivet redesign main phase-0 --surface marketing
+```
+
+`/rivet redesign` will:
+1. Regenerate the canonical design brief for each stale surface
+2. Dispatch subagents to re-apply `ui_commands` (colorize, typeset, layout, etc.) to each affected component — logic, props, and tests are untouched
+3. Run `design-lint.mjs` to verify compliance
+4. Update `design_hashes` in plan frontmatter so `/rivet run` pre-flight is satisfied
+
+After redesign, you're clear to `/rivet run main phase-1` (or wherever you left off) without hitting the drift warning.
+
 ---
 
 ## 14. Common scenarios & troubleshooting
@@ -1139,6 +1209,12 @@ Stage 2a step 4 found a similar component. Pick: replace with reuse, rename + sh
 
 **"Brief source: derived."**
 Point 17 derived a brief on the fly because no canonical brief exists at `docs/design/brief-{surface}.md`. Consider `/rivet plan {phase}` to capture it for future consistency.
+
+**"Design context has changed since this plan was generated" (after updating DESIGN.md).**
+This is `/rivet run` pre-flight telling you that `design_hashes` are stale. Run `/rivet redesign` (or `/rivet redesign --dry-run` first to preview). After redesign completes, hashes are updated and the warning goes away. Alternatively, `/rivet plan {spec} {phase} --refresh` re-enriches non-done tasks only — use that if you haven't finished building the phase yet.
+
+**"`redesign_failed` on task N — lint did not clear after 2 retries."**
+The subagent couldn't bring the component into full token compliance without touching props or logic. Inspect the component manually, apply the token changes by hand, then re-run `/rivet redesign --tasks N` to retry only that task and get the hash updated.
 
 ### Status issues
 
