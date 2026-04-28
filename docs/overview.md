@@ -72,6 +72,23 @@ For each project, ensure:
 
 Checkpoint tags accumulate on whichever branch you're on: `rivet/{spec}/{phase-id}/ckpt-{n}` (spec mode) or `rivet/adhoc/{name}/ckpt-{n}` (ad-hoc). These are your rollback targets.
 
+### Merging back to main
+
+Rivet is a solo workflow — no PR or remote approval step is required. Merging happens locally at the end of each phase or review fix-plan.
+
+**When the merge offer appears:**
+
+- **Spec phase complete** (all sub-plans done): Phase Completion block — nudges you to run `/rivet review` first, then offers merge / push / skip.
+- **Review fix-plan complete** (all fix sub-plans done): Review Fix-Plan Completion block — review already happened, so this is the right merge point directly.
+- **Ad-hoc plan complete**: merge offer appears after the spec-overlap check.
+
+**Merge styles:**
+
+- **Regular merge** — preserves all task commits on main. Full history visible.
+- **Squash merge** — collapses the entire phase into one commit on main, branch history stays on the rivet branch. Cleaner main log.
+
+The merge is always an offer, never automatic. You can always choose "push branch only" or "do nothing" and merge manually. After any merge, Rivet returns you to the feature branch so checkpoint tags and rollback remain intact.
+
 ## Usage
 
 **Spec creation (entry point — produce `docs/specs/{name}.md`):**

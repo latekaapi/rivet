@@ -471,6 +471,12 @@ P2 / P3 findings are presented as suggestions only — not auto-appended. User c
 
 After verification completes (or was skipped), run the **full test suite** one final time to confirm everything passes together.
 
+If the full suite fails at this point, do NOT move to the next sub-plan. Fix the regression first.
+
+**Determine whether there is a next sub-plan.** List `*.md` non-recursively in the current plan directory, sort by filename, and check if any file after the current one has `status: pending` or `status: in_progress` tasks. For spec phase runs, exclude the `reviews/` subdirectory (as Step 3 already does).
+
+#### If a next sub-plan exists
+
 ```
 Sub-plan complete: {sub-plan-name} ✓
 
@@ -489,7 +495,127 @@ If the user picks squash, walk them through a non-interactive `git reset --soft`
 
 If ending your session here, run `/rivet learnings` first.
 
-If the full suite fails at this point, do NOT move to the next sub-plan. Fix the regression first.
+#### If this is the last sub-plan of a spec phase
+
+Go to **Phase Completion** below.
+
+#### If this is the last sub-plan of a review fix-plan
+
+Go to **Review Fix-Plan Completion** below.
+
+(Ad-hoc plans skip Sub-Plan Transitions on completion — go directly to Ad-Hoc Plan Completion.)
+
+---
+
+### Phase Completion
+
+Triggered when the last sub-plan of a normal spec phase finishes.
+
+```
+Phase complete: {spec} / {phase} ✓
+
+{total-n} tasks completed across {total-sub-plans} sub-plans.
+Branch: {current-branch}
+
+Tip: /rivet review before merging catches issues a human reviewer would flag.
+     If you haven't reviewed yet, consider doing that first.
+
+Options:
+  1. Run /rivet review first (then the review fix-plan run will offer the merge)
+  2. Merge to main now
+  3. Push branch only (no merge yet)
+  4. Do nothing
+```
+
+**If already on main** (user declined branch at pre-flight): skip options 2–3 — there is nothing to merge. Report completion only.
+
+**If main has diverged** since this branch was created, warn before merging: "Note: main has received commits since this branch was created. The merge may require conflict resolution." (Check with `git log HEAD..main --oneline`.)
+
+**Option 2 — Merge to main now:**
+
+```
+Merge style?
+  A. Regular merge  — preserves all task commits on main
+  B. Squash merge   — one commit on main, branch history stays intact
+```
+
+On A:
+```bash
+git checkout main
+git merge {current-branch}
+git checkout {current-branch}
+```
+
+On B:
+```bash
+git checkout main
+git merge --squash {current-branch}
+git commit  # default message: "feat({phase}): {spec}/{phase}"
+git checkout {current-branch}
+```
+
+After merge: `Merged {current-branch} → main ✓. Returned to {current-branch}. Next: git push origin main if you want to push to remote.`
+
+**Option 3 — Push branch only:**
+```bash
+git push origin {current-branch}
+```
+Report: `Pushed {current-branch} to origin. No merge performed.`
+
+**Option 4:** No git ops. Report: `Branch {current-branch} is intact whenever you're ready.`
+
+If ending your session here, run `/rivet learnings` first.
+
+---
+
+### Review Fix-Plan Completion
+
+Triggered when the last sub-plan of a review fix-plan finishes (`/rivet run {spec} {phase} review {slug}`).
+
+Review already happened before this fix-plan was created. This is the right merge point — no nudge to review again.
+
+```
+Review fixes applied: {spec} / {phase} / reviews / {slug} ✓
+
+{total-n} tasks completed across {total-sub-plans} sub-plans.
+Branch: {current-branch}
+
+Options:
+  1. Merge to main now
+  2. Squash-merge to main (one clean commit)
+  3. Push branch only (no merge yet)
+  4. Do nothing
+```
+
+**If already on main:** skip options 1–3. Report completion only.
+
+**If main has diverged:** same divergence warning as Phase Completion above.
+
+**Option 1 — Regular merge:**
+```bash
+git checkout main
+git merge {current-branch}
+git checkout {current-branch}
+```
+
+**Option 2 — Squash merge:**
+```bash
+git checkout main
+git merge --squash {current-branch}
+git commit  # default message: "fix({phase}): review/{slug}"
+git checkout {current-branch}
+```
+
+**Option 3 — Push only:**
+```bash
+git push origin {current-branch}
+```
+
+**Option 4:** No git ops.
+
+After any merge: `Merged {current-branch} → main ✓. Returned to {current-branch}. Next: git push origin main if you want to push to remote.`
+
+If ending your session here, run `/rivet learnings` first.
 
 ### Session Resumption
 
@@ -592,3 +718,44 @@ Want me to append these to the decision logs? (y / all / n / choose)
 `y` / `all` appends to every overlapping spec. `choose` asks per-spec. For each confirmed spec, append the entry to its `## Decision Log` section (create the heading at the end of the file if missing).
 
 If no overlaps: skip this step, just report completion normally.
+
+After the overlap check and any decision-log appends complete (or were skipped), offer to merge:
+
+```
+Ready to merge rivet/adhoc/{name} to main?
+
+Branch: rivet/adhoc/{name}
+
+Options:
+  1. Merge to main now
+  2. Squash-merge to main (one clean commit)
+  3. Push branch only (no merge yet)
+  4. Do nothing
+```
+
+**If already on main:** skip options 1–3. Report completion only.
+
+**If main has diverged:** warn before merging: "Note: main has received commits since this branch was created. The merge may require conflict resolution." (Check with `git log HEAD..main --oneline`.)
+
+**Option 1:**
+```bash
+git checkout main
+git merge rivet/adhoc/{name}
+git checkout rivet/adhoc/{name}
+```
+
+**Option 2:**
+```bash
+git checkout main
+git merge --squash rivet/adhoc/{name}
+git commit  # default message: "feat(adhoc): {name}"
+git checkout rivet/adhoc/{name}
+```
+
+**Option 3:** `git push origin rivet/adhoc/{name}`
+
+**Option 4:** No git ops.
+
+After any merge: `Merged rivet/adhoc/{name} → main ✓. Returned to rivet/adhoc/{name}. Next: git push origin main if you want to push to remote.`
+
+If ending your session here, run `/rivet learnings` first.
