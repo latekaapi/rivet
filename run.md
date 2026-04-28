@@ -170,6 +170,8 @@ Review and commit sequentially by task id after all parallel subagents return. D
 
 **Parallel subagents must NOT commit.** Git's index lock (`.git/index.lock`) is per-repo; concurrent `git commit` calls from parallel Agent processes can collide and fail. Instead, instruct parallel subagents to stage their changes (`git add`) but stop short of committing. Their final return should include a `files_staged:` list. The coordinator then iterates through the returned subagents in task-id order, runs Stage 0/1/2 review per task, and issues the commit itself (coordinator → Bash tool, sequential).
 
+**Coordinator must commit by explicit file path, not by staged index.** Because all parallel subagents share the same Git index, a plain `git commit -m "..."` commits every staged file — mixing multiple tasks into one commit. Always pass the task's files as positional arguments: `git commit extension/path/a.tsx extension/path/b.test.tsx -m "feat: ..."`. This commits only those files regardless of what else is staged, leaving other tasks' staged files untouched for their own subsequent commits.
+
 If in doubt (e.g., uncertain whether two tasks touch the same file), fall back to sequential dispatch. The safety-vs-speed tradeoff favors safety.
 
 ### Subagent Prompt Construction
