@@ -358,7 +358,7 @@ Reset the counter to zero on any successful task (no fix needed). A single isola
 
 ### Checkpointing
 
-Read `checkpointEvery` from `rivet.config.json` at the project root (if the file exists). Default to **3** if the key is absent or the file doesn't exist.
+Read `checkpointEvery` from `rivet.config.json` at the project root (if the file exists). Default to **4** if the key is absent or the file doesn't exist.
 
 After every **`checkpointEvery` completed tasks**, run the **full test suite** before pausing. This catches regressions — task 8 might break something from task 2 that the per-task test didn't cover.
 
