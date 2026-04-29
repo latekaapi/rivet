@@ -168,13 +168,15 @@ Before dispatching the next task, look at the next few pending tasks and their `
 
 Review and commit sequentially by task id after all parallel subagents return. Do not flip `status: done` for any parallel task until it has passed Stage 0 + Stage 1 + Stage 2 + Stage 2a (if `ui: true`) review. Commit each parallel task as it clears review, in task-id order. If one fails, fix-and-retry that task only — the others that already passed stay committed, and the failed one blocks any downstream task that depended on it. **Do not apply `design_extends` in parallel** — if two parallel tasks both declare `design_extends`, fall back to sequential dispatch to avoid concurrent writes to the same DESIGN file.
 
-**Checkpoint check after each parallel batch:** After committing the last task in a parallel batch, count total `status: done` tasks since the last checkpoint. If that count has reached a `checkpointEvery` multiple, trigger the Checkpointing flow (full suite + tag + pause) before dispatching the next batch. Never defer this check to end-of-sub-plan.
+**Checkpoint counter:** Maintain a running integer `commits_since_ckpt`, initialized to 0 at the start of the sub-plan (or reset to 0 after each checkpoint). Increment it by 1 immediately after each coordinator commit — whether a single sequential commit or one of the sequential commits that follow a parallel batch. Do not re-derive this count from the plan file; trust the in-context counter.
 
 **Parallel subagents must NOT commit.** Git's index lock (`.git/index.lock`) is per-repo; concurrent `git commit` calls from parallel Agent processes can collide and fail. Instead, instruct parallel subagents to stage their changes (`git add`) but stop short of committing. Their final return should include a `files_staged:` list. The coordinator then iterates through the returned subagents in task-id order, runs Stage 0/1/2 review per task, and issues the commit itself (coordinator → Bash tool, sequential).
 
 **Coordinator must commit by explicit file path, not by staged index.** Because all parallel subagents share the same Git index, a plain `git commit -m "..."` commits every staged file — mixing multiple tasks into one commit. Always pass the task's files as positional arguments: `git commit extension/path/a.tsx extension/path/b.test.tsx -m "feat: ..."`. This commits only those files regardless of what else is staged, leaving other tasks' staged files untouched for their own subsequent commits.
 
 If in doubt (e.g., uncertain whether two tasks touch the same file), fall back to sequential dispatch. The safety-vs-speed tradeoff favors safety.
+
+**Checkpoint gate — runs before every subagent dispatch:** Before constructing the next subagent prompt (single or parallel), check `commits_since_ckpt % checkpointEvery == 0 && commits_since_ckpt > 0`. If true, trigger the Checkpointing flow (full suite → tag → pause report → wait for y/pause/review) before dispatching anything. This gate fires for sequential tasks too, not only after parallel batches. Never skip it to "finish the batch first".
 
 ### Subagent Prompt Construction
 
