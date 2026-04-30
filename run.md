@@ -531,7 +531,23 @@ Phase complete: {spec} / {phase} ✓
 
 {total-n} tasks completed across {total-sub-plans} sub-plans.
 Branch: {current-branch}
+```
 
+Before presenting options, read `docs/specs/{spec}.md`, find the `### Phase N` heading that matches `{phase}`, and extract its `**Verification checklist:**` bullets. If the field exists, display it:
+
+```
+── What to try now ──────────────────────────────────────────
+  [ ] <checklist item 1>
+  [ ] <checklist item 2>
+  ...
+─────────────────────────────────────────────────────────────
+```
+
+If the field is absent in the spec, show one line: `(No verification checklist in spec — add one with /rivet spec {spec} --refresh)`
+
+Then continue:
+
+```
 Tip: /rivet review before merging catches issues a human reviewer would flag.
      If you haven't reviewed yet, consider doing that first.
 

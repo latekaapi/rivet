@@ -528,9 +528,16 @@ Per phase:
 - **Estimated:** 30 hours (~6 days at 5 hrs/day)
 - **Dependencies:** None — clean start
 - **Spec sections this implements:** §3.4 (C0, C1.1, C1.2)
+- **Verification checklist:**
+  - [ ] `php artisan import:github --founder=1 --dry-run` → prints "3 commits found"
+  - [ ] `php artisan tinker` → `App\Services\CalendarParser::parse($testFounder)` returns array with ≥1 event
+  - [ ] Open `/admin/founders/1` → enrichment tab shows populated data rows
+  - [ ] `php artisan test --filter=DataIngestionTest` → all pass
 ```
 
 Phase scope is capability IDs, not free text. Traceability (Step 4.3) reads these. Dependencies link to other phases (within the same spec) or other specs (cross-spec; see Step 4.2).
+
+Every phase must include a `**Verification checklist:**` field. Write 2–5 steps the human user can follow immediately after the phase completes to confirm the build worked — browser URLs to visit, CLI commands with expected output, UI flows to click through. If a phase produces nothing a human can see or touch (e.g. pure infrastructure wiring), say so explicitly: `- [ ] No user-visible output this phase — run \`php artisan test\` to confirm all N tests pass.` The field is required even when there is nothing to show; the honest "nothing to see yet" entry is better than a silent omission.
 
 Estimate per phase: 4–8 sub-plans worth of work (so `/rivet plan {spec} phase-N` produces a reasonably-sized split). If a phase is >40 hrs, split it.
 
@@ -672,6 +679,7 @@ If user wants to iterate → `Status: Drafting` (spec is usable; scoring not yet
 ## Phase 3: Build Plan
 
 ### Phase 0: <name>
+<!-- Scope, Success criteria, Estimated, Dependencies, Spec sections, Verification checklist -->
 ### Phase 1: <name>
 ### Phase 2: <name>
 ...
