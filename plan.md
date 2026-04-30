@@ -641,14 +641,17 @@ Launch a single Agent with `subagent_type: "Plan"`, `description: "Senior plan r
 > - All generated sub-plan files: `{list of paths}`
 > - Spec at `{spec_path}` (omit this line in ad-hoc mode; instead include the user-confirmed task description verbatim)
 > - `CLAUDE.md` (skip if missing)
+> - For every task whose Step 1 (failing test) or Step 3 (implementation) code block references an existing class, mock helper, factory, base test class, fixture, or config key: read the file that defines it. Build the list yourself by scanning each task's code blocks for `use` statements, class names, factory invocations (`UserFactory::new`), facade calls (`Cache::driver`), config reads (`config('foo.bar')`), fixture paths, and `Mockery::mock(X::class)` targets. If a referenced symbol cannot be located in the repo at all, that itself is a Lens 4 finding (the plan assumed something exists that doesn't).
 >
-> Apply three lenses. For every issue you find, name the lens, the sub-plan file, and the location (Task N / frontmatter / file_map / overview).
+> Apply four lenses. For every issue you find, name the lens, the sub-plan file, and the location (Task N / frontmatter / file_map / overview).
 >
 > **Lens 1 — Executor-friendliness.** Every task must be mechanically executable by a less-capable model. Flag: ambiguous instructions ("implement appropriate X"), decisions left to the executor ("choose a suitable Y"), references like "follow the pattern in the other services" without specifying which pattern, missing exact file paths, missing complete code (only a stub or "// implementation here"), missing or vague `**Tests that:**` lines, missing or non-conventional commit-message specifications, multiple unrelated changes bundled into one task.
 >
 > **Lens 2 — Architecture & dependency correctness.** Verify: `depends_on` is acyclic across all sub-plans; tasks marked independent (no `depends_on` entry from each other) are actually independent (no shared file, no implicit ordering); tasks linked by `depends_on` actually need to be serial; the integration test (last task per sub-plan) wires the right components from that sub-plan's earlier tasks; the File Map matches the union of files referenced in Tasks; frontmatter `tasks[]` order, IDs, and titles match the markdown body.
 >
 > **Lens 3 — Spec alignment & scope discipline.** Verify: the sub-plans collectively deliver the phase's exit criteria from the spec; no scope creep beyond the spec's stated requirements; no premature abstraction (no helpers for hypothetical futures, no surrounding cleanup, no extra layers introduced "just in case"); domain language matches the spec (e.g., if the spec says "enrichment," tasks say "enrichment," not "data augmentation"); cross-spec collisions flagged in Step 3 (if any) are actually acted on in the plan, not just noted.
+>
+> **Lens 4 — Code grounding.** Every code block, mock setup, factory call, base-class reference, and existing-symbol invocation in a task must match the actual implementation in the repo. Flag: test setups that mock methods the target class doesn't expose (or with wrong signatures), factory calls referencing columns/relationships not in the migration, `extends` / `use` references to classes that don't exist or live at a different path, helper/util calls with the wrong argument shape, fixture loaders pointing at files not present in the repo, configuration keys read from `config()` that aren't defined. The plan can introduce *new* code — Lens 4 only fires when the plan references something it expects to *already exist*.
 >
 > Output a YAML+markdown report. **Do not attempt to edit files.** Your tool result must be a single document in this format and nothing else:
 >
@@ -661,12 +664,19 @@ Launch a single Agent with `subagent_type: "Plan"`, `description: "Senior plan r
 > findings:
 >   - id: 1
 >     severity: blocker | major | minor
->     lens: executor | architecture | spec_alignment
+>     lens: executor | architecture | spec_alignment | code_grounding
 >     sub_plan: 01-site-intelligence
 >     location: "Task 5"            # or "frontmatter", "file_map", "overview"
 >     issue: "Task 5 instruction 'implement appropriate retry logic' leaves design decisions to the executor."
 >     proposed_fix: "Replace Task 5's Step 3 code block with: 'Wrap the DataForSeoClient::fetch() call in Illuminate\\Support\\Facades\\Retry::times(3, ..., 100) with backoff 100ms, 400ms, 1600ms.'"
 >   - id: 2
+>     severity: blocker
+>     lens: code_grounding
+>     sub_plan: 03-enrichment
+>     location: "Task 4"
+>     issue: "Task 4's failing-test block calls Mockery::mock(SiteFetcher::class)->shouldReceive('fetch')->andReturn(...), but SiteFetcher (app/Services/SiteFetcher.php) exposes fetchSite($url): SiteResponse — there is no fetch() method. Test will fail at mock binding before reaching the assertion."
+>     proposed_fix: "In Task 4 Step 1, change shouldReceive('fetch') to shouldReceive('fetchSite') and update the argument matcher to ->with('https://example.com'). Update the andReturn() payload to a SiteResponse instance, not a raw array."
+>   - id: 3
 >     ...
 > ---
 >

@@ -4,9 +4,30 @@
 
 Before loading context or executing anything, verify the environment is ready. Skip this step for `rollback` invocations — the rollback flow has its own checks.
 
-1. **Working tree clean?** Run `git status --porcelain`. If output is non-empty:
-   - Offer three options: (1) commit the outstanding work, (2) stash it, (3) abort the run.
-   - Do not proceed with dirty state — mid-run commits would entangle outside work with task commits.
+1. **Working tree clean?** Run `git status --porcelain`. If output is non-empty, classify the dirty state — the cause determines the right recovery:
+
+   **Case A — Staged but uncommitted files** (`git diff --cached --name-only` returns output):
+   These files were staged but never committed. This pattern typically means a previous run's parallel subagents ran `git add` but the session died before the coordinator committed.
+   - Offer:
+     1. **Commit as crash recovery** — `git commit -m "chore: recover staged files from interrupted run"`. Salvages the work; proceed after commit.
+     2. **Reset staging area** — `git reset HEAD` (unstages everything, leaves files modified). Then re-evaluate Case B below.
+     3. **Abort** — exit without touching anything. Inspect manually with `git diff --cached`.
+   - Wait for choice before proceeding.
+
+   **Case B — Unstaged dirty files or untracked files** (empty staging area):
+   These are the user's own edits or new files — not from a previous run.
+   - **Special case:** If the only dirty files are under `docs/plans/`, offer a shortcut first:
+     - **Commit plan state** — `git add docs/plans/ && git commit docs/plans/ -m "chore: recover plan state from interrupted run"` — then proceed directly (no stash needed). Plan files being dirty is expected after a crash; stashing them hides the progress record.
+   - Otherwise offer:
+     1. **Commit** — commit the outstanding work, then proceed.
+     2. **Stash** — `git stash push -u -m "rivet: pre-run stash"`, then proceed. Reminder: run `git stash pop` at session end.
+     3. **Abort** — exit without touching anything.
+   - Wait for choice before proceeding.
+
+   **Case C — Both staged and unstaged dirty simultaneously:**
+   Run Case A first (staged subagent files carry higher collision risk). After staging area is clean, re-run `git status --porcelain`; if still dirty, run Case B.
+
+   Do not proceed with any dirty state — mid-run commits would entangle outside work with task commits.
 
 2. **Branch up to date with remote?** Run `git fetch` then `git status -uno`. If behind:
    - Warn the user. Offer to `git pull --ff-only` or proceed anyway.
@@ -176,7 +197,13 @@ Review and commit sequentially by task id after all parallel subagents return. D
 
 If in doubt (e.g., uncertain whether two tasks touch the same file), fall back to sequential dispatch. The safety-vs-speed tradeoff favors safety.
 
-**Checkpoint gate — runs before every subagent dispatch:** Before constructing the next subagent prompt (single or parallel), check `commits_since_ckpt % checkpointEvery == 0 && commits_since_ckpt > 0`. If true, trigger the Checkpointing flow (full suite → tag → pause report → wait for y/pause/review) before dispatching anything. This gate fires for sequential tasks too, not only after parallel batches. Never skip it to "finish the batch first".
+**Checkpoint gate — runs before every subagent dispatch AND between commits in a parallel batch:** Two firing points:
+
+1. **Before dispatch:** Before constructing the next subagent prompt (single or parallel), check `commits_since_ckpt % checkpointEvery == 0 && commits_since_ckpt > 0`. If true, trigger the Checkpointing flow (full suite → tag → pause report → wait for y/pause/review) before dispatching anything.
+
+2. **Between parallel commits:** After each coordinator commit within a parallel batch (increment counter, then check immediately), apply the same `commits_since_ckpt % checkpointEvery == 0 && commits_since_ckpt > 0` check. If true, checkpoint before committing the next task in the batch. The remaining staged-but-uncommitted tasks from the batch stay staged; the checkpoint runs against what is committed so far; on user `y`, commit the next task and continue the batch.
+
+This closes the gap where a parallel batch dispatched at `commits_since_ckpt=N` crosses a checkpoint boundary mid-batch (e.g. dispatched at 3, 1st commit → 4, 2nd commit → 5) without ever triggering the gate. Never skip either check to "finish the batch first".
 
 ### Subagent Prompt Construction
 
@@ -381,6 +408,21 @@ git tag rivet/adhoc/{name}/ckpt-{n}
 
 For spec runs the tag prefix is `rivet/{spec}/{phase}/` (e.g. `rivet/main/phase-0/ckpt-1`); for ad-hoc it is `rivet/adhoc/{name}/`. `{n}` is the checkpoint ordinal within this sub-plan. Tags are the rollback targets — without them, recovery from a bad late task means hunting through `git log`.
 
+After tagging, **commit the plan state** so task statuses, session-log entries, and learnings-scratch entries survive a machine loss:
+
+```bash
+# Spec mode — commit only if plan files changed:
+git diff --cached --quiet -- docs/plans/{spec}/{phase}/ || true
+git add docs/plans/{spec}/{phase}/
+git diff --cached --quiet && true || git commit docs/plans/{spec}/{phase}/ -m "chore: persist plan state after ckpt-{n} [{n} tasks done]"
+
+# Ad-hoc mode:
+git add docs/plans/adhoc/{name}/
+git diff --cached --quiet && true || git commit docs/plans/adhoc/{name}/ -m "chore: persist plan state after ckpt-{n} [{n} tasks done]"
+```
+
+If nothing changed (plan files already match HEAD), skip silently. This plan-state commit does **NOT** increment `commits_since_ckpt` — it is infrastructure, not a task.
+
 Then pause and report to the user:
 
 ```
@@ -403,7 +445,23 @@ Continue? (y / pause / review)
 ```
 
 - **y** or **continue**: proceed with next batch
-- **pause**: stop here, save progress, session can resume later
+- **pause**: plan state is already committed (done at the tag step above). Push the branch and the checkpoint tag to remote, then stop:
+  ```bash
+  git push origin {current-branch}
+  git push origin rivet/{spec}/{phase}/ckpt-{n}
+  ```
+  (Ad-hoc: push `rivet/adhoc/{name}/ckpt-{n}` instead.)
+  Then print the pause summary:
+  ```
+  Paused at ckpt-{n}. Pushed {current-branch} to origin.
+
+    Branch:    {current-branch}
+    Tag:       rivet/{spec}/{phase}/ckpt-{n}  (pushed)
+    Completed: {total_tasks_done} tasks total ({tasks_since_last_ckpt} since last checkpoint)
+    Remaining: {tasks_remaining} tasks in {sub-plan-name}
+
+  To resume:  /rivet run {spec} {phase}
+  ```
 - **review**: run `/rivet review` on changes so far before continuing
 
 **Token optimization:** After the user continues past a checkpoint, prior subagent reports are no longer needed in detail — only the session log entries matter. If context is getting long, summarize prior task reports to their one-line session log entries before dispatching the next subagent.
@@ -572,11 +630,42 @@ If ending your session here, run `/rivet learnings` first.
 
 ### Session Resumption
 
-When `/rivet run` is invoked and there's an in-progress plan:
-- Detect incomplete tasks automatically
-- Show what was already completed
-- Resume from the next incomplete task
-- No need to re-execute completed tasks
+When `/rivet run` is invoked and there's an in-progress plan, reconcile the plan's task states against the actual git log before dispatching any subagent. This catches divergence from crashes, manual resets, or lost disk.
+
+**Step 1 — Collect committed task ids from git:**
+```bash
+git log --oneline --since='14 days ago' --grep='task [0-9]'
+```
+Extract task ids from matching commit subjects (e.g., `feat: add SiteFetcher (task 3)` → id `3`). Build set: `committed_ids`.
+
+**Step 2 — Collect plan task states:**
+Read each sub-plan YAML frontmatter. Build `done_ids` (status=done) and `pending_ids` (status=pending or in_progress).
+
+**Step 3 — Cross-check for divergence:**
+- **Plan says done but no matching commit** (`done_ids \ committed_ids` non-empty): Plan was updated but the commit was lost (disk died after YAML write). For each flagged task, ask:
+  ```
+  Warning: Task {id} ({title}) is marked done in the plan but has no git commit.
+  Options: (1) re-execute it — treat as pending; (2) accept as done — trust plan over git; (3) abort
+  ```
+  Wait for the user's choice per flagged task.
+- **Commit exists but plan says pending** (`committed_ids \ done_ids` non-empty): Commit survived but the plan status update was lost. Auto-mark these tasks `done` in plan YAML and report:
+  ```
+  Recovered: Task {id} has a git commit but was pending in plan — marked done automatically.
+  ```
+  No user confirmation needed — commit is ground truth.
+
+**Step 4 — Report and proceed:**
+```
+Session resumed: {spec} / {phase}
+
+  Committed tasks:    {list of committed_ids}
+  Plan-done tasks:    {list of done_ids after reconciliation}
+  Recovered:          {n tasks auto-marked done}
+  Needs confirmation: {n tasks awaiting user choice}
+
+Resuming from Task {next-incomplete-id}: {title}
+```
+If there are no discrepancies, skip the detail block and print only "Resuming from Task N: {title}".
 
 ## Rollback
 
