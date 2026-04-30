@@ -187,7 +187,7 @@ Before dispatching the next task, look at the next few pending tasks and their `
 
 …dispatch them **concurrently** — one Agent tool call per task in a single assistant message. Hard cap: **3 in parallel**. More than that and coordinator attention fragments; review quality drops.
 
-Review and commit sequentially by task id after all parallel subagents return. Do not flip `status: done` for any parallel task until it has passed Stage 0 + Stage 1 + Stage 2 + Stage 2a (if `ui: true`) review. Commit each parallel task as it clears review, in task-id order. If one fails, fix-and-retry that task only — the others that already passed stay committed, and the failed one blocks any downstream task that depended on it. **Do not apply `design_extends` in parallel** — if two parallel tasks both declare `design_extends`, fall back to sequential dispatch to avoid concurrent writes to the same DESIGN file.
+Review and commit sequentially by task id after all parallel subagents return. Do not flip `status: done` for any parallel task until it has passed Stage 0 + Stage 1 + Stage 2 + Stage 2a (if `ui: true`) review. On pass, follow the "If review passes" sequence in order: commit first (including the plan file), then flip `status: done`, then session-log entry — see that block for the exact commit form. If one task fails, fix-and-retry that task only — the others that already passed stay committed, and the failed one blocks any downstream task that depended on it. **Do not apply `design_extends` in parallel** — if two parallel tasks both declare `design_extends`, fall back to sequential dispatch to avoid concurrent writes to the same DESIGN file.
 
 **Checkpoint counter:** Maintain a running integer `commits_since_ckpt`, initialized to 0 at the start of the sub-plan (or reset to 0 after each checkpoint). Increment it by 1 immediately after each coordinator commit — whether a single sequential commit or one of the sequential commits that follow a parallel batch. Do not re-derive this count from the plan file; trust the in-context counter.
 
@@ -346,9 +346,14 @@ Skip this entire Stage 2a block for tasks where `ui: false`.
 **If Stage 2a fails on a UI task 3 times in a row**, escalate to the Bail-Out Heuristic (treat as three consecutive review failures).
 
 **If review passes:**
-1. Update the task's `status:` to `done` in the plan file's YAML frontmatter
-2. Add a one-line entry to `docs/plans/{spec}/{phase}/session-log.md` (create with `# Session Log\n` header if absent)
-3. Proceed to next task
+1. **Commit the task's work before touching the plan file.** Bundle the sub-plan file into the same commit so plan state and code are atomic:
+   - **Parallel tasks** (subagent staged but did not commit): `git commit <task-files> docs/plans/{spec}/{phase}/<subplan>.md -m "feat: <title> (task N)"`
+   - **Sequential tasks** (subagent already committed): follow with `git add docs/plans/{spec}/{phase}/<subplan>.md && git commit docs/plans/{spec}/{phase}/<subplan>.md -m "chore: plan state for task N"`.
+
+   Never flip `status: done` before the commit is confirmed in git. Keeping the YAML flip as the last step ensures crashes leave the plan pessimistic (task still `in_progress` or `pending`) rather than optimistic — the existing auto-reconciliation in Session Resumption then recovers silently with no user prompt.
+2. Update the task's `status:` to `done` in the plan file's YAML frontmatter.
+3. Add a one-line entry to `docs/plans/{spec}/{phase}/session-log.md` (create with `# Session Log\n` header if absent).
+4. Proceed to next task.
 
 Before dispatching each subagent, also update that task's `status:` from `pending` to `in_progress` so concurrent or resumed sessions see the current state.
 
@@ -658,12 +663,11 @@ Extract task ids from matching commit subjects (e.g., `feat: add SiteFetcher (ta
 Read each sub-plan YAML frontmatter. Build `done_ids` (status=done) and `pending_ids` (status=pending or in_progress).
 
 **Step 3 — Cross-check for divergence:**
-- **Plan says done but no matching commit** (`done_ids \ committed_ids` non-empty): Plan was updated but the commit was lost (disk died after YAML write). For each flagged task, ask:
+- **Plan says done but no matching commit** (`done_ids \ committed_ids` non-empty): YAML was flipped before the git commit landed — should be unreachable after the commit-first ordering rule, but handle defensively. Auto-reset these tasks to `pending` and re-execute:
   ```
-  Warning: Task {id} ({title}) is marked done in the plan but has no git commit.
-  Options: (1) re-execute it — treat as pending; (2) accept as done — trust plan over git; (3) abort
+  Recovered: Task {id} ({title}) marked done in plan but has no git commit — reset to pending, will re-execute.
   ```
-  Wait for the user's choice per flagged task.
+  No user confirmation needed — re-execution is idempotent for task-shaped work (write a file, add a test, commit). Report all auto-resets in the session-resume summary alongside the inverse recoveries.
 - **Commit exists but plan says pending** (`committed_ids \ done_ids` non-empty): Commit survived but the plan status update was lost. Auto-mark these tasks `done` in plan YAML and report:
   ```
   Recovered: Task {id} has a git commit but was pending in plan — marked done automatically.
